@@ -76,20 +76,25 @@ async function sendMainMessage(channel) {
 
   const mainEmbed = new EmbedBuilder()
     .setTitle("📜 Welcome to the Sol's RNG Community rules channel!")
-    .setDescription(
-      '**This is where all the rules enforced on our Discord server are listed. Please read and follow them to ensure a pleasant experience for everyone!**\n\n' +
-      'If there is anything confusing, you can go to the channel <#1411590263033561128> to contact the server administrators and ask questions.\n\n' +
-      '⚠️ Warning Point & Punishment System:\n```\n' +
-      ' • 1 Warning Point  = no punishment  \n' +
-      ' • 2 Warning Points = 1h Mute \n' +
-      ' • 3 Warning Points = 12h Mute \n' +
-      ' • 4 Warning Points = 1d Mute \n' +
-      ' • 5 Warning Points = A ban \n' +
-      ' • Warning Points expire after 30 days\n```' +
-      '\n -# Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol\'s RNG community in Southeast Asia!
-    )
+    .setDescription(`
+**This is where all the rules enforced on our Discord server are listed. Please read and follow them to ensure a pleasant experience for everyone!**
+
+If there is anything confusing, you can go to the channel <#1411590263033561128> to contact the server administrators and ask questions.
+
+⚠️ Warning Point & Punishment System:
+\`\`\`
+ • 1 Warning Point  = no punishment
+ • 2 Warning Points = 1h Mute
+ • 3 Warning Points = 12h Mute
+ • 4 Warning Points = 1d Mute
+ • 5 Warning Points = A ban
+ • Warning Points expire after 30 days
+\`\`\`
+
+-# Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!
+    `)
     .setColor(3092790)
-    .setImage('https://media.discordapp.net/attachments/1411987904980586576/1412916875163209901/SOLS_RNG_COUMUNICATION.png')
+    .setImage('https://media.discordapp.net/attachments/1411987904980586576/1412916875163209901/SOLS_RNG_COUMUNICATION.png');
 
   await channel.send({ embeds: [mainEmbed] }).catch(console.error);
 }
