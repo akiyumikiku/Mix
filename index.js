@@ -88,7 +88,7 @@ async function sendMainMessage(channel) {
       ' • 5 Warning Points = A ban \n' +
       ' • Warning Points expire after 30 days\n' +
       '```\n\n' +
-      "Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!"
+      "-# Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!"
     )
     .setColor(3092790)
     .setImage('https://media.discordapp.net/attachments/1411987904980586576/1412916875163209901/SOLS_RNG_COUMUNICATION.png')
