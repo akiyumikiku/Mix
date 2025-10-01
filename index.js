@@ -85,12 +85,10 @@ If there is anything confusing, you can go to the channel <#1411590263033561128>
  • Warning Points expire after 30 days
 \`\`\`
 
-Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!`
+-# Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!`
     )
     .setColor(0x2f3136)
-    .setFooter({ text: "Sol's RNG Community" })
-    .setTimestamp();
-
+  
   const menu = new StringSelectMenuBuilder()
     .setCustomId("rules_menu")
     .setPlaceholder("Select rules you want to see")
