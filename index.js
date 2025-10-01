@@ -1,4 +1,4 @@
-// ===== Discord Bot Full (Rename + Rules + Hide After 3 Days) =====
+// ===== Discord Bot Full =====
 const {
   Client,
   GatewayIntentBits,
@@ -8,16 +8,25 @@ const {
   Partials,
 } = require("discord.js");
 require("dotenv").config();
-const express = require("express");
-const rules = require("./rules"); // file rules.js của bạn
 
 // ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
-const CATEGORY_ID = process.env.CATEGORY_ID.trim();
-const RULES_CHANNEL_ID = process.env.RULES_CHANNEL_ID;
+const CATEGORY_ID = process.env.CATEGORY_ID?.trim();
+const RULES_CHANNEL_ID = process.env.RULES_CHANNEL_ID?.trim();
+const ROLE_ID = process.env.ROLE_ID?.trim();
 
-const BASE_ROLE_ID = "1415319898468651008"; // base role
-const AUTO_ROLE_ID = process.env.AUTO_ROLE_ID; // role thêm khi channel được tạo
+// ===== Hệ thống Role =====
+const BASE_ROLE_ID = "1415319898468651008";
+const AUTO_ROLE_ID = "1411240101832298569";
+const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
+const BLOCK_ROLE_IDS = [
+  "1411639327909220352","1411085492631506996","1418990676749848576","1410988790444458015",
+  "1415322209320435732","1415351613534503022","1415350650165924002","1415320304569290862",
+  "1415351362866380881","1415351226366689460","1415322385095332021","1415351029305704498",
+  "1415350143800049736","1415350765291307028","1418990664762523718","1417802085378031689",
+  "1417097393752506398","1420270612785401988","1420276021009322064","1415350457706217563",
+  "1415320854014984342","1414165862205751326"
+];
 
 // ===== CLIENT =====
 const client = new Client({
@@ -30,7 +39,7 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
 });
 
-// ===== Channel rename =====
+// ===== Rename channel =====
 async function renameChannel(channel) {
   if (channel.parentId !== CATEGORY_ID) return;
   if (!channel.name.endsWith("-webhook")) return;
@@ -39,60 +48,14 @@ async function renameChannel(channel) {
   const newName = `🛠★】${username}-macro`;
 
   if (channel.name !== newName) {
-    try {
-      await channel.setName(newName);
-      console.log(`✅ Đã đổi tên: ${channel.name} → ${newName}`);
-    } catch (err) {
-      console.error(`❌ Lỗi đổi tên ${channel.id}:`, err);
-    }
+    await channel.setName(newName).catch(console.error);
+    console.log(`✅ Đã đổi tên: ${channel.name} → ${newName}`);
   }
 }
 
-// ===== Timer cho hide channel =====
-const channelTimers = new Map();
-function startHideTimer(channel) {
-  if (channelTimers.has(channel.id)) {
-    clearTimeout(channelTimers.get(channel.id));
-  }
-
-  const timer = setTimeout(async () => {
-    // Ẩn channel toàn bộ mọi role
-    try {
-      await channel.permissionOverwrites.set([
-        { id: channel.guild.roles.everyone.id, deny: ["ViewChannel"] },
-      ]);
-      console.log(`🚫 Đã ẩn channel ${channel.name} sau 3 ngày không có tin nhắn`);
-    } catch (err) {
-      console.error(`❌ Lỗi ẩn channel ${channel.name}:`, err);
-    }
-
-    // Xóa role nếu có
-    const userId = channel.topic?.match(/(\d{17,19})$/)?.[1];
-    if (userId) {
-      try {
-        const member = await channel.guild.members.fetch(userId);
-        const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
-        if (member && role) await member.roles.remove(role);
-      } catch (err) {
-        console.error(`❌ Lỗi xóa role cho ${channel.name}:`, err);
-      }
-    }
-  }, 1000 * 60 * 60 * 24 * 3); // 3 ngày
-
-  channelTimers.set(channel.id, timer);
-}
-
-// ===== EVENTS =====
-client.once("ready", async () => {
-  console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-
-  // Quét toàn bộ channel trong category để rename
-  client.channels.cache
-    .filter((ch) => ch.parentId === CATEGORY_ID)
-    .forEach((ch) => renameChannel(ch));
-
-  // Gửi menu rules nếu chưa có
-  const channel = await client.channels.fetch(RULES_CHANNEL_ID);
+// ===== Rules embed + menu =====
+async function sendRulesMenu() {
+  const channel = await client.channels.fetch(RULES_CHANNEL_ID).catch(() => null);
   if (!channel) return console.log("❌ Không tìm thấy kênh rules");
 
   const messages = await channel.messages.fetch({ limit: 50 });
@@ -102,93 +65,124 @@ client.once("ready", async () => {
       m.components.length > 0 &&
       m.components[0].components[0].customId === "rules_menu"
   );
+  if (alreadySent) return;
 
-  if (!alreadySent) {
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("rules_menu")
-      .setPlaceholder("Select rules you would like to see")
-      .addOptions([
-        { label: "1 Warning Rules", value: "opt1", description: "Rule violations that will get you 1 warn.", emoji: "⚠️" },
-        { label: "Channel Misuses", value: "opt2", description: "Channel Misuse rules that will get you 1 warn.", emoji: "📢" },
-        { label: "2 Warning Rules", value: "opt3", description: "Rule violations that will get you 2 warns.", emoji: "❌" },
-        { label: "3 Warning Rules", value: "opt4", description: "Rule violations that will get you 3 warns.", emoji: "⚡" },
-        { label: "Instant Ban Rules", value: "opt5", description: "Rule violations that will get you a ban.", emoji: "⛔" },
-      ]);
+  const mainEmbed = new EmbedBuilder()
+    .setTitle("📜 Welcome to the Sol's RNG Community rules channel!")
+    .setDescription(
+      `**This is where all the rules enforced on our Discord server are listed. Please read and follow them to ensure a pleasant experience for everyone!**
 
-    const row = new ActionRowBuilder().addComponents(menu);
+If there is anything confusing, you can go to the channel <#1411590263033561128> to contact the server administrators and ask questions.
 
-    const mainEmbed = new EmbedBuilder()
-      .setTitle("📜 Welcome to the Sol's RNG Communication rules channel!")
-      .setDescription(
-        "**This is where all the rules enforced on our Discord server are listed. Please read and follow them to ensure a pleasant experience for everyone!**\n\n" +
-        "If there is anything confusing, you can go to the channel <#1411590263033561128> to contact the server administrators and ask questions.\n\n" +
-        "⚠️ Warning Point & Punishment System:\n```\n" +
-        " • 1 Warning Point  = no punishment  \n" +
-        " • 2 Warning Points = 1h Mute \n" +
-        " • 3 Warning Points = 12h Mute \n" +
-        " • 4 warning Points = 1d Mute \n" +
-        " • 5 warning Points = A ban \n" +
-        " • Warning Points expire after 30 days\n" +
-        "```\n\n" +
-        "Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!"
-      )
-      .setColor(0x2f3136)
-      .setImage("https://media.discordapp.net/attachments/1411987904980586576/1412916875163209901/SOLS_RNG_COUMUNICATION.png")
-      .setFooter({ text: "Sol's RNG Community" })
-      .setTimestamp();
+⚠️ Warning Point & Punishment System:
+\`\`\`
+ • 1 Warning Point  = no punishment  
+ • 2 Warning Points = 1h Mute 
+ • 3 Warning Points = 12h Mute 
+ • 4 warning Points = 1d Mute 
+ • 5 warning Points = A ban 
+ • Warning Points expire after 30 days
+\`\`\`
 
-    await channel.send({ embeds: [mainEmbed], components: [row] });
-    console.log("✅ Đã gửi menu rules mới.");
+-# Thank you for reading and following! We always strive to develop the most civilized and prosperous Sol's RNG community in Southeast Asia!`
+    )
+    .setColor(0x2f3136)
+    .setFooter({ text: "Sol's RNG Community" })
+    .setTimestamp();
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("rules_menu")
+    .setPlaceholder("Select rules you want to see")
+    .addOptions([
+      { label: "1 Warning Rules", value: "opt1", description: "1 warn violations" },
+      { label: "Channel Misuses", value: "opt2", description: "Channel misuse violations" },
+      { label: "2 Warning Rules", value: "opt3", description: "2 warn violations" },
+      { label: "3 Warning Rules", value: "opt4", description: "3 warn violations" },
+      { label: "Instant Ban Rules", value: "opt5", description: "Instant ban violations" },
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(menu);
+
+  await channel.send({ embeds: [mainEmbed], components: [row] });
+  console.log("✅ Rules menu đã gửi.");
+}
+
+// ===== Update roles hệ thống =====
+async function updateMemberRoles(member) {
+  if (member.user.bot) return;
+
+  const hasBase = member.roles.cache.has(BASE_ROLE_ID);
+  const hasBlock = member.roles.cache.some((r) => BLOCK_ROLE_IDS.includes(r.id));
+  if (!hasBase && !hasBlock) await member.roles.add(BASE_ROLE_ID).catch(() => {});
+  if (hasBase && hasBlock) await member.roles.remove(BASE_ROLE_ID).catch(() => {});
+
+  const hasAuto = member.roles.cache.has(AUTO_ROLE_ID);
+  const hasRemove = member.roles.cache.has(REMOVE_IF_HAS_ROLE_ID);
+  if (!hasAuto && !hasRemove) await member.roles.add(AUTO_ROLE_ID).catch(() => {});
+  if (hasAuto && hasRemove) await member.roles.remove(AUTO_ROLE_ID).catch(() => {});
+}
+
+// ===== Ẩn/hiện channel =====
+async function checkChannelInactivity(channel) {
+  if (channel.parentId !== CATEGORY_ID) return;
+  const fetched = await channel.messages.fetch({ limit: 50 });
+  const webhookMsgs = fetched.filter((m) => m.webhookId);
+  const lastWebhook = webhookMsgs.first();
+  const threeDays = 3 * 24 * 60 * 60 * 1000;
+
+  if (!lastWebhook || Date.now() - lastWebhook.createdTimestamp > threeDays) {
+    await channel.permissionOverwrites.set([{ id: channel.guild.id, deny: ["ViewChannel"] }]);
+    console.log(`🔒 Channel ${channel.name} đã ẩn (3 ngày không có tin nhắn webhook)`);
+  } else {
+    await channel.permissionOverwrites.set([{ id: channel.guild.id, allow: ["ViewChannel"] }]);
+    console.log(`🔓 Channel ${channel.name} đã hiển thị (có tin nhắn webhook)`);
   }
+}
+
+// ===== EVENT =====
+client.once("ready", async () => {
+  console.log(`✅ Bot đã login: ${client.user.tag}`);
+  await sendRulesMenu();
 });
 
-// Khi channel mới được tạo
+// Khi channel tạo mới
 client.on("channelCreate", async (channel) => {
-  if (channel.parentId !== CATEGORY_ID) return;
-
   await renameChannel(channel);
 
-  // Add base role
-  const userId = channel.topic?.match(/(\d{17,19})$/)?.[1];
-  if (userId) {
-    try {
-      const member = await channel.guild.members.fetch(userId);
-      const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
-      if (member && role) await member.roles.add(role);
-    } catch {}
+  // Add ROLE_ID tự động
+  if (ROLE_ID && channel.guild) {
+    const role = channel.guild.roles.cache.get(ROLE_ID);
+    if (role) {
+      channel.guild.members.fetch().then((members) => {
+        members.forEach((m) => {
+          if (!m.user.bot) m.roles.add(role).catch(() => {});
+        });
+      });
+      console.log(`✅ Đã add role ${ROLE_ID} cho tất cả members`);
+    }
   }
 
-  startHideTimer(channel); // Bắt đầu timer 3 ngày
+  // Set timeout 3 ngày kiểm tra inactivity
+  setTimeout(() => checkChannelInactivity(channel), 3 * 24 * 60 * 60 * 1000);
 });
 
-// Khi có tin nhắn mới
-client.on("messageCreate", (message) => {
-  if (message.channel.parentId === CATEGORY_ID && message.author.bot) {
-    startHideTimer(message.channel); // Reset timer nếu có tin nhắn mới
-  }
+// Khi có tin nhắn webhook
+client.on("messageCreate", async (message) => {
+  if (message.webhookId) await checkChannelInactivity(message.channel);
 });
 
-// ===== Interaction chọn menu =====
+// Guild member add/update roles
+client.on("guildMemberAdd", updateMemberRoles);
+client.on("guildMemberUpdate", (_, newMember) => updateMemberRoles(newMember));
+
+// Interaction rules menu
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
   if (interaction.customId !== "rules_menu") return;
 
-  const data = rules[interaction.values[0]];
-  if (!data) return;
-
-  const embed = new EmbedBuilder()
-    .setTitle(data.title)
-    .setDescription(data.desc)
-    .setColor(data.color)
-    .setImage(data.image);
-
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  const value = interaction.values[0];
+  await interaction.reply({ content: `Bạn chọn: ${value}`, ephemeral: true });
 });
-
-// ===== Keep Alive =====
-const app = express();
-app.get("/", (req, res) => res.send("Bot vẫn online! ✅"));
-app.listen(process.env.PORT || 3000, () => console.log("🌐 Keep-alive server chạy"));
 
 // ===== LOGIN =====
 client.login(TOKEN);
