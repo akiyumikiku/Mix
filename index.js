@@ -70,7 +70,16 @@ async function updateMemberRoles(member) {
   if (hasAutoRole && hasRemoveRole) await member.roles.remove(AUTO_ROLE_ID).catch(() => {});
 }
 
-// ===== Send Main Embed =====
+// ===== Ready Event =====
+client.once("ready", async () => {
+  console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
+
+  // Rename tất cả channel trong category
+  client.channels.cache
+    .filter(ch => ch.parentId === CATEGORY_ID)
+    .forEach(ch => renameChannel(ch));
+  
+// ===== Send Main Embed + Menu =====
 async function sendMainMessage(channel) {
   if (!channel) return;
 
@@ -96,48 +105,22 @@ If there is anything confusing, you can go to the channel <#1411590263033561128>
     .setColor(3092790)
     .setImage('https://media.discordapp.net/attachments/1411987904980586576/1412916875163209901/SOLS_RNG_COUMUNICATION.png');
 
-  await channel.send({ embeds: [mainEmbed] }).catch(console.error);
+  // Menu select
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("rules_menu")
+    .setPlaceholder("Select rules you would like to see")
+    .addOptions([
+      { label: "1 Warning Rules", value: "opt1", description: "Rule violations that will get you 1 warn.", emoji: "<:x1Warn:1420078766855819284>" },
+      { label: "Channel Misuses", value: "opt2", description: "Channel Misuse rules that will get you 1 warn.", emoji: "<:channelmisuse:1416316766312857610>" },
+      { label: "2 Warning Rules", value: "opt3", description: "Rule violations that will get you 2 warns.", emoji: "<:x2Warn:1416316781060161556>" },
+      { label: "3 Warning Rules", value: "opt4", description: "Rule violations that will get you 3 warns.", emoji: "<:x3Warn:1416316796029374464>" },
+      { label: "Instant Ban Rules", value: "opt5", description: "Rule violations that will get you a ban.", emoji: "<:instantban:1416316818297192510>" },
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(menu);
+
+  await channel.send({ embeds: [mainEmbed], components: [row] }).catch(console.error);
 }
-
-// ===== Ready Event =====
-client.once("ready", async () => {
-  console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-
-  // Rename tất cả channel trong category
-  client.channels.cache
-    .filter(ch => ch.parentId === CATEGORY_ID)
-    .forEach(ch => renameChannel(ch));
-
-  // Send main message + rules menu
-  const channel = await client.channels.fetch(RULES_CHANNEL_ID);
-  if (!channel) return console.log("❌ Không tìm thấy kênh rules");
-
-  const messages = await channel.messages.fetch({ limit: 50 });
-  const alreadySent = messages.find(
-    m => m.author.id === client.user.id &&
-         m.components.length > 0 &&
-         m.components[0].components[0].customId === "rules_menu"
-  );
-
-  if (!alreadySent) {
-    await sendMainMessage(channel);
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("rules_menu")
-      .setPlaceholder("Select rules you would like to see")
-      .addOptions([
-        { label: "1 Warning Rules", value: "opt1", description: "Rule violations that will get you 1 warn.", emoji: "<:x1Warn:1420078766855819284>" },
-        { label: "Channel Misuses", value: "opt2", description: "Channel Misuse rules that will get you 1 warn.", emoji: "<:channelmisuse:1416316766312857610>" },
-        { label: "2 Warning Rules", value: "opt3", description: "Rule violations that will get you 2 warns.", emoji: "<:x2Warn:1416316781060161556>" },
-        { label: "3 Warning Rules", value: "opt4", description: "Rule violations that will get you 3 warns.", emoji: "<:x3Warn:1416316796029374464>" },
-        { label: "Instant Ban Rules", value: "opt5", description: "Rule violations that will get you a ban.", emoji: "<:instantban:1416316818297192510>" },
-      ]);
-
-    const row = new ActionRowBuilder().addComponents(menu);
-    await channel.send({ content: "📜 **Server Rules are pinned here:**", components: [row] });
-    console.log("✅ Đã gửi menu rules mới.");
-  }
-});
 
 // ===== Channel Create + Auto Role + Rename =====
 client.on("channelCreate", async (channel) => {
