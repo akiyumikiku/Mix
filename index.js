@@ -13,6 +13,7 @@ const readyEvent = require("./events/ready");
 const guildMemberEvent = require("./events/guildMember");
 const channelCreateEvent = require("./events/channelCreate");
 const interactionEvent = require("./events/interaction");
+const messageDeleteBot = require("./events/messageDeleteBot");
 
 // ==== Config ====
 const TOKEN = process.env.TOKEN;
@@ -36,6 +37,7 @@ readyEvent(client, CATEGORY_ID, RULES_CHANNEL_ID, sendMainMessage, renameChannel
 guildMemberEvent(client, updateMemberRoles);
 channelCreateEvent(client, CATEGORY_ID, ROLE_ID, renameChannel);
 interactionEvent(client, rules);
+messageDeleteBot(client);
 
 // ==== Keep Alive ====
 const app = express();
