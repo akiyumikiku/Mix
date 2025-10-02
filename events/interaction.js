@@ -1,19 +1,25 @@
-const { EmbedBuilder } = require("discord.js");
-
-module.exports = (client, rules) => {
+module.exports = (client) => {
   client.on("interactionCreate", async (interaction) => {
-    if (!interaction.isStringSelectMenu()) return;
-    if (interaction.customId !== "rules_menu") return;
+    if (!interaction.isChatInputCommand()) return;
 
-    const data = rules[interaction.values[0]];
-    if (!data) return;
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
 
-    const embed = new EmbedBuilder()
-      .setTitle(data.title)
-      .setDescription(data.desc)
-      .setColor(data.color)
-      .setImage(data.image || null);
-
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    try {
+      await command.execute(interaction, client);
+    } catch (error) {
+      console.error(error);
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({
+          content: "❌ Đã xảy ra lỗi khi chạy lệnh này.",
+          ephemeral: true,
+        });
+      } else {
+        await interaction.reply({
+          content: "❌ Đã xảy ra lỗi khi chạy lệnh này.",
+          ephemeral: true,
+        });
+      }
+    }
   });
 };
