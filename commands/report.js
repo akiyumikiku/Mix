@@ -1,36 +1,32 @@
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 
 module.exports = {
-  name: "report",
-  async execute(interaction, client) {
-    const member = interaction.options.getUser("member");
+  data: new SlashCommandBuilder()
+    .setName("report")
+    .setDescription("Báo cáo một người dùng vi phạm")
+    .addUserOption((option) =>
+      option.setName("user").setDescription("Người bị báo cáo").setRequired(true)
+    )
+    .addStringOption((option) =>
+      option.setName("reason").setDescription("Lý do").setRequired(true)
+    ),
+
+  async execute(interaction) {
+    const user = interaction.options.getUser("user");
     const reason = interaction.options.getString("reason");
 
     const reportChannelId = process.env.REPORT_CHANNEL_ID;
-    const reportChannel = await client.channels.fetch(reportChannelId).catch(() => null);
+    const reportChannel = interaction.guild.channels.cache.get(reportChannelId);
 
-    if (!reportChannel) {
-      return interaction.reply({
-        content: "❌ Không tìm thấy kênh report. Vui lòng cấu hình `REPORT_CHANNEL_ID` trong `.env`.",
-        ephemeral: true
-      });
+    if (reportChannel) {
+      await reportChannel.send(
+        `🚨 **Báo cáo vi phạm**\n👤 Người bị báo cáo: ${user}\n📄 Lý do: ${reason}\n📢 Người báo cáo: ${interaction.user}`
+      );
     }
 
-    const reportEmbed = new EmbedBuilder()
-      .setTitle("🚨 New Report")
-      .addFields(
-        { name: "👤 Người bị report", value: `${member}`, inline: true },
-        { name: "📝 Lý do", value: reason, inline: true },
-        { name: "📌 Reported by", value: `${interaction.user}`, inline: false }
-      )
-      .setColor(0xff0000)
-      .setTimestamp();
-
-    const msg = await reportChannel.send({ embeds: [reportEmbed] });
-
     await interaction.reply({
-      content: `✅ Report đã được gửi thành công. [Xem chi tiết tại đây](${msg.url})`,
-      ephemeral: true
+      content: `✅ Đã gửi báo cáo về ${user} với lý do: ${reason}`,
+      ephemeral: true,
     });
-  }
+  },
 };
