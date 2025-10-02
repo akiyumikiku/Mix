@@ -13,12 +13,11 @@ const BLOCK_ROLE_IDS = [
 
 async function updateMemberRoles(member) {
   try {
-    if (!member || member.user.bot) return;
+    if (member.user.bot) return;
 
     const hasBaseRole = member.roles.cache.has(BASE_ROLE_ID);
     const hasAnyBlockRole = member.roles.cache.some(r => BLOCK_ROLE_IDS.includes(r.id));
 
-    // Base role logic
     if (!hasBaseRole && !hasAnyBlockRole) {
       await member.roles.add(BASE_ROLE_ID).catch(() => {});
       console.log(`✅ Added base role for ${member.user.tag}`);
@@ -31,7 +30,6 @@ async function updateMemberRoles(member) {
     const hasAutoRole = member.roles.cache.has(AUTO_ROLE_ID);
     const hasRemoveRole = member.roles.cache.has(REMOVE_IF_HAS_ROLE_ID);
 
-    // Auto role logic
     if (!hasAutoRole && !hasRemoveRole) {
       await member.roles.add(AUTO_ROLE_ID).catch(() => {});
       console.log(`✅ Added auto role for ${member.user.tag}`);
