@@ -1,4 +1,4 @@
-const { renameChannel } = require("../rename");
+const { renameChannel } = require("../functions/rename");
 
 const CATEGORY_ID = process.env.CATEGORY_ID; 
 const ROLE_ID = process.env.AUTO_ROLE_ID;    
