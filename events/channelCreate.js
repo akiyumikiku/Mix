@@ -1,13 +1,15 @@
-module.exports = (client, CATEGORY_ID, ROLE_ID, renameChannel) => {
+const { renameChannel } = require("../rename");
+
+const CATEGORY_ID = process.env.CATEGORY_ID; 
+const ROLE_ID = process.env.AUTO_ROLE_ID;    
+
+module.exports = (client) => {
   client.on("channelCreate", async (channel) => {
     try {
-      // Chỉ xử lý trong category được config
       if (channel.parentId !== CATEGORY_ID) return;
 
-      // Rename kênh
       await renameChannel(channel, CATEGORY_ID);
 
-      // Auto add role cho user nếu có userId trong topic
       if (!channel.topic) return;
       const match = channel.topic.match(/(\d{17,19})$/);
       if (!match) return;
