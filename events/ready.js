@@ -7,12 +7,11 @@ module.exports = {
   async execute(client) {
     console.log(`✅ Bot đã sẵn sàng: ${client.user.tag}`);
 
-    // === CONFIG ===
-    const CHANNEL_ID = "1410980859028308074"; // Thay ID channel cần gửi embed
+    const CHANNEL_ID = process.env.RULES_CHANNEL_ID;
     const channel = await client.channels.fetch(CHANNEL_ID).catch(() => null);
     if (!channel) return console.error("❌ Không tìm thấy channel để gửi embed main");
 
-    // === Xóa message cũ của bot (nếu có) ===
+    // Xóa tin nhắn cũ
     try {
       const messages = await channel.messages.fetch({ limit: 20 });
       const botMessages = messages.filter(m => m.author.id === client.user.id);
@@ -24,13 +23,13 @@ module.exports = {
       console.error("⚠️ Không thể xóa message cũ:", err);
     }
 
-    // === Embed chính ===
+    // Embed main
     const mainEmbed = new EmbedBuilder()
       .setColor("Blue")
       .setTitle("📜 Server Rules")
       .setDescription("Chọn mục bên dưới để xem chi tiết các rules!");
 
-    // === Menu lựa chọn ===
+    // Menu
     const menu = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId("rules_menu")
@@ -44,7 +43,6 @@ module.exports = {
         )
     );
 
-    // === Gửi embed main ===
     await channel.send({ embeds: [mainEmbed], components: [menu] });
     console.log("✅ Đã gửi embed main");
   },
