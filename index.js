@@ -77,6 +77,8 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 });
+// ==== Load events roles ====
+require("./events/guildMemberAdd")(client);
 
 // ==== Keep Alive ====
 const app = express();
