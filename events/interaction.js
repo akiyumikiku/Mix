@@ -1,3 +1,5 @@
+const { EmbedBuilder } = require("discord.js");
+
 module.exports = (client, rules) => {
   client.on("interactionCreate", async (interaction) => {
     if (!interaction.isStringSelectMenu()) return;
@@ -6,7 +8,6 @@ module.exports = (client, rules) => {
     const data = rules[interaction.values[0]];
     if (!data) return;
 
-    const { EmbedBuilder } = require("discord.js");
     const embed = new EmbedBuilder()
       .setTitle(data.title)
       .setDescription(data.desc)
