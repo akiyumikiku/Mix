@@ -12,7 +12,7 @@ module.exports = (client, rules) => {
       .setTitle(data.title)
       .setDescription(data.desc)
       .setColor(data.color)
-      .setImage(data.image);
+      .setImage(data.image || null);
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
   });
