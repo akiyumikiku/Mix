@@ -1,15 +1,25 @@
 const { SlashCommandBuilder } = require("discord.js");
+const { createHelpEmbed } = require("../functions/help.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("help")
-    .setDescription("Xem danh sách lệnh của bot"),
+    .setDescription("Hiển thị danh sách lệnh của bot"),
 
-  async execute(interaction) {
-    await interaction.reply({
-      content:
-        "ℹ️ Các lệnh hiện có:\n`/help` - Xem danh sách lệnh\n`/report` - Báo cáo vi phạm",
-      ephemeral: true,
-    });
-  },
+  async execute(interaction, client) {
+    try {
+      const embed = createHelpEmbed();
+
+      await interaction.reply({
+        embeds: [embed],
+        ephemeral: true // chỉ hiện cho người dùng (có thể bỏ nếu muốn public)
+      });
+    } catch (err) {
+      console.error("Help command error:", err);
+      await interaction.reply({
+        content: "⚠️ Không thể hiển thị hướng dẫn!",
+        ephemeral: true
+      });
+    }
+  }
 };
