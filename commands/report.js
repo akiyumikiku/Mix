@@ -6,17 +6,17 @@ const REPORT_CHANNEL_ID = process.env.REPORT_CHANNEL_ID;
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("report")
-    .setDescription("Report someone")
+    .setDescription("Báo cáo vi phạm trong server")
     .addUserOption(option =>
       option
         .setName("user")
-        .setDescription("Report user")
+        .setDescription("Người bạn muốn báo cáo")
         .setRequired(true)
     )
     .addStringOption(option =>
       option
         .setName("reason")
-        .setDescription("Why you report")
+        .setDescription("Lý do báo cáo")
         .setRequired(false)
     )
     .addStringOption(option =>
@@ -30,7 +30,7 @@ module.exports = {
     try {
       const reported = interaction.options.getUser("user");
       const reason = interaction.options.getString("reason") || "Không có";
-      const proof = interaction.options.getString("proof") || "Không có";
+      const proof = interaction.options.getString("proof"); // ❌ không còn ép = "Không có"
 
       const reportChannel = interaction.guild.channels.cache.get(REPORT_CHANNEL_ID);
 
