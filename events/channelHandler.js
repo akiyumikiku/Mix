@@ -50,21 +50,29 @@ module.exports = (client) => {
         ow => ow.deny.has("ViewChannel") && ow.id === channel.guild.roles.everyone.id
       );
 
-      // Nếu là webhook → luôn mở lại và reset 3 ngày
-      if (isWebhookMsg) {
-        for (const role of channel.guild.roles.cache.values()) {
-          if (role.managed) continue;
-          await channel.permissionOverwrites.edit(role, { ViewChannel: true }).catch(() => {});
+      // Hàm ẩn channel cho tất cả role (kể cả everyone)
+      const hideChannel = async () => {
+        for (const [roleId] of channel.permissionOverwrites.cache) {
+          await channel.permissionOverwrites.edit(roleId, { ViewChannel: false }).catch(() => {});
         }
+      };
 
-        // Reset timer 3 ngày
+      // Hàm mở channel cho tất cả role trừ everyone
+      const openChannel = async () => {
+        for (const [roleId] of channel.permissionOverwrites.cache) {
+          if (roleId === channel.guild.roles.everyone.id) continue; // ❌ Không mở cho @everyone
+          await channel.permissionOverwrites.edit(roleId, { ViewChannel: true }).catch(() => {});
+        }
+      };
+
+      // Nếu là webhook → mở lại (trừ everyone) và reset 3 ngày
+      if (isWebhookMsg) {
+        await openChannel();
+
         if (channelTimers.has(channel.id)) clearTimeout(channelTimers.get(channel.id));
         const timer = setTimeout(async () => {
           try {
-            for (const role of channel.guild.roles.cache.values()) {
-              if (role.managed) continue;
-              await channel.permissionOverwrites.edit(role, { ViewChannel: false }).catch(() => {});
-            }
+            await hideChannel();
             if (member.roles.cache.has(ROLE_ID)) {
               await member.roles.remove(ROLE_ID).catch(() => {});
             }
@@ -75,24 +83,17 @@ module.exports = (client) => {
         }, 3 * 24 * 60 * 60 * 1000);
 
         channelTimers.set(channel.id, timer);
-
-        console.log(`✅ Channel ${channel.name} mở lại do có webhook mới`);
+        console.log(`✅ Channel ${channel.name} mở lại do có webhook mới (everyone vẫn bị ẩn)`);
       }
 
       // Nếu là user → chỉ xử lý khi channel đang ẩn
       else if (!isWebhookMsg && isHidden) {
-        for (const role of channel.guild.roles.cache.values()) {
-          if (role.managed) continue;
-          await channel.permissionOverwrites.edit(role, { ViewChannel: true }).catch(() => {});
-        }
+        await openChannel();
 
         if (channelTimers.has(channel.id)) clearTimeout(channelTimers.get(channel.id));
         const timer = setTimeout(async () => {
           try {
-            for (const role of channel.guild.roles.cache.values()) {
-              if (role.managed) continue;
-              await channel.permissionOverwrites.edit(role, { ViewChannel: false }).catch(() => {});
-            }
+            await hideChannel();
             if (member.roles.cache.has(ROLE_ID)) {
               await member.roles.remove(ROLE_ID).catch(() => {});
             }
@@ -103,8 +104,7 @@ module.exports = (client) => {
         }, 8 * 60 * 60 * 1000);
 
         channelTimers.set(channel.id, timer);
-
-        console.log(`✅ Channel ${channel.name} mở lại do user nhắn`);
+        console.log(`✅ Channel ${channel.name} mở lại do user nhắn (everyone vẫn bị ẩn)`);
       }
 
     } catch (err) {
