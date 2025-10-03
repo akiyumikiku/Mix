@@ -9,7 +9,7 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
     client.user.setPresence({
       activities: [
         {
-          name: "Keep gambling to get global aura...", // bạn đổi text tuỳ ý
+          name: "Sol's RNG", // bạn đổi text tuỳ ý
           type: 0 // 0 = Playing, 3 = Watching, 5 = Competing
         }
       ],
