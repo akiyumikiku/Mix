@@ -2,45 +2,40 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, Events } = require("discord.js");
 
 module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
+  const BOT_ROLE_ID = "1411639327909220352"; // Role bot
+  const MAIN_MESSAGE_ID = "1424089527751807101"; // ID tin nhắn menu
   const TARGET_ROLES = ["1410990099042271352", "1411991634194989096"];
 
   // =============================
   // 📊 Hàm cập nhật số member online / tổng
   // =============================
-  const updatePresence = async () => {
+  async function updatePresence() {
     const guild = client.guilds.cache.first();
     if (!guild) return;
 
-    // ⚠️ Không fetch lại toàn bộ mỗi lần (Discord đã tự cache presence)
-    const totalMembers = guild.members.cache.filter(m => 
-      !m.user.bot && !m.roles.cache.has("1411639327909220352")
-    ).size;
+    // fetch members nếu cache trống
+    if (guild.members.cache.size < guild.memberCount) {
+      await guild.members.fetch().catch(() => {});
+    }
 
-    const onlineMembers = guild.members.cache.filter(m =>
-      !m.user.bot &&
-      !m.roles.cache.has("1411639327909220352") &&
-      m.presence &&
-      m.presence.status !== "offline"
-    ).size;
+    const members = guild.members.cache.filter(m => !m.user.bot && !m.roles.cache.has(BOT_ROLE_ID));
+    const totalMembers = members.size;
+    const onlineMembers = members.filter(m => m.presence && m.presence.status !== "offline").size;
 
     client.user.setPresence({
       activities: [{
         name: `${onlineMembers}/${totalMembers} Members Online 👥`,
-        type: 3
+        type: 3 // Watching
       }],
       status: "online"
     });
-  };
+  }
 
   // =============================
   // ⚙️ Khi bot sẵn sàng
   // =============================
   client.once("ready", async () => {
     console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-
-    // ⚡ Chỉ fetch 1 lần toàn bộ khi restart để có đầy đủ dữ liệu
-    const guild = client.guilds.cache.first();
-    if (guild) await guild.members.fetch({ withPresences: true });
     await updatePresence();
 
     // ===== Quét toàn bộ channel trong category 1 lần khi restart =====
@@ -54,12 +49,11 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
     }
     console.log(`🔁 Đã quét ${channels.size} channel trong category khi restart.`);
 
-    // ===== Xử lý embed menu trong rules channel =====
+    // ===== Xử lý tin nhắn menu trong channel rules =====
     try {
       const channel = await client.channels.fetch(RULES_CHANNEL_ID);
       if (!channel) return console.log("❌ Không tìm thấy channel rules");
 
-      const MAIN_MESSAGE_ID = "1424089527751807101";
       const mainMessage = await channel.messages.fetch(MAIN_MESSAGE_ID);
       if (!mainMessage) return console.log("❌ Không tìm thấy tin nhắn chính!");
 
@@ -68,8 +62,7 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
         mainMessage.components[0].components[0].customId === "rules_menu";
 
       if (!hasMenu) {
-        console.log("⚡ Tin nhắn chính chưa có menu → thêm menu mới...");
-
+        console.log("⚡ Thêm menu vào tin nhắn chính...");
         const menu = new StringSelectMenuBuilder()
           .setCustomId("rules_menu")
           .setPlaceholder("Select rules you would like to see")
@@ -82,7 +75,6 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
           ]);
 
         const row = new ActionRowBuilder().addComponents(menu);
-
         await mainMessage.edit({
           content: "📜 **Server Rules are pinned here:**",
           embeds: mainMessage.embeds,
@@ -91,7 +83,7 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
 
         console.log("✅ Đã thêm menu vào embed chính.");
       } else {
-        console.log("📌 Embed chính đã có menu → bỏ qua.");
+        console.log("📌 Tin nhắn menu đã có sẵn → bỏ qua.");
       }
     } catch (err) {
       console.error("❌ Lỗi khi xử lý embed chính:", err);
@@ -99,7 +91,7 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
   });
 
   // =============================
-  // 🔄 Cập nhật khi có thay đổi
+  // 🔄 Cập nhật khi có thay đổi thành viên / trạng thái
   // =============================
   client.on(Events.GuildMemberAdd, updatePresence);
   client.on(Events.GuildMemberRemove, updatePresence);
