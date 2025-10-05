@@ -1,31 +1,25 @@
-// events/ready.js
 const { ActionRowBuilder, StringSelectMenuBuilder, Events } = require("discord.js");
 
 module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
-  // Hàm cập nhật presence
+  const BOT_ROLE_ID = "1411639327909220352";
+
+  // ===== Hàm cập nhật presence =====
   const updatePresence = async () => {
     const guild = client.guilds.cache.first();
     if (!guild) return;
 
-    // Lấy danh sách member trừ bot-role
-    await guild.members.fetch(); // fetch để cập nhật đủ
-    const memberCount = guild.members.cache.filter(m => 
-      !m.roles.cache.has("1411639327909220352") // loại role bot
-    ).size;
+    const members = guild.members.cache.filter(m => !m.roles.cache.has(BOT_ROLE_ID));
+    const total = members.size;
+    const online = members.filter(m => m.presence && m.presence.status !== "offline").size;
 
     client.user.setPresence({
-      activities: [
-        {
-          name: `👥 ${memberCount} members`,
-          type: 3, // Watching
-        }
-      ],
+      activities: [{ name: `👥 ${online}/${total} Members Online`, type: 3 }],
       status: "online"
     });
   };
 
-  // Khi bot ready
-  client.once("ready", async () => {
+  // ===== Khi bot khởi động =====
+  client.once(Events.ClientReady, async () => {
     console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
     await updatePresence();
 
@@ -34,17 +28,15 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
       .filter(ch => ch.parentId === CATEGORY_ID)
       .forEach(ch => renameChannel(ch));
 
-    // ===== Xử lý embed chính =====
+    // ===== Xử lý embed chính (menu chọn luật) =====
     try {
       const channel = await client.channels.fetch(RULES_CHANNEL_ID);
       if (!channel) return console.log("❌ Không tìm thấy kênh rules");
 
-      const MAIN_MESSAGE_ID = "1424089527751807101";
+      const MAIN_MESSAGE_ID = "1424079560546455642"; // ID tin nhắn webhook làm menu
       const mainMessage = await channel.messages.fetch(MAIN_MESSAGE_ID);
 
-      if (!mainMessage) {
-        return console.log("❌ Không tìm thấy embed chính trong channel!");
-      }
+      if (!mainMessage) return console.log("❌ Không tìm thấy embed chính trong channel!");
 
       const hasMenu =
         mainMessage.components.length > 0 &&
@@ -81,7 +73,8 @@ module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
     }
   });
 
-  // Cập nhật khi có người join/leave
+  // ===== Cập nhật khi member thay đổi =====
   client.on(Events.GuildMemberAdd, updatePresence);
   client.on(Events.GuildMemberRemove, updatePresence);
+  client.on(Events.PresenceUpdate, updatePresence);
 };
