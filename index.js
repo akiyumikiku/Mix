@@ -13,12 +13,17 @@ const path = require("path");
 // ==== Khởi tạo client ====
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.Guilds,           // Quản lý server
+    GatewayIntentBits.GuildMembers,     // Lấy danh sách thành viên
+    GatewayIntentBits.GuildMessages,    // Theo dõi tin nhắn
+    GatewayIntentBits.MessageContent,   // Đọc nội dung tin nhắn
+    GatewayIntentBits.GuildPresences,   // 👈 Quan trọng: để theo dõi online/offline
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
+  partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.GuildMember,
+  ],
 });
 
 client.commands = new Collection();
@@ -59,7 +64,7 @@ client.once("ready", () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
 });
 
-// ==== Keep Alive (cho hosting free) ====
+// ==== Keep Alive (cho hosting free, ví dụ Replit) ====
 const app = express();
 app.get("/", (req, res) => res.send("Bot vẫn online! ✅"));
 app.listen(process.env.PORT || 3000, () =>
