@@ -2,52 +2,51 @@
 module.exports = {
   opt1: {
     title: " **1 Warning Rules**",
-    desc: `*Flooding/Spamming*\nDescription: Messages that occupy a large portion of the screen or involve excessive posting of irrelevant content.\n*Exceptions:* Informative messages\n(Additional 1 Hour mute)\n\n
-*Excessive Begging*\nDescription: Repeatedly asking for favors, items, roles, or other benefits disruptively.\n*Exceptions:* Jokingly begging\n\n
-*XP Farming*\nDescription: Sending messages solely to gain XP (Arcane bot).\nPunishments:\n1st Offense = reminder\n2nd Offense = Reduce XP\n3rd Offense = Level Reset`,
+    desc: `*Flooding/Spamming*\nDescription: Messages that occupy a large portion of the screen or involve the excessive posting of irrelevant content.\n*Exceptions:* Informative messages\n(Additional 1 Hour mute)\n\n
+*Opening Tickets Falsely*\nDescription: Opening a Ticket for little/no reason or unnecessary questions\n\n
+*Excessive Begging*\nDescription: Repeatedly asking for favors, items, roles, privileges, or other benefits in an annoying or disruptive manner.\n*Exceptions:* Jokingly begging\n\n
+*XP Farming*\nDescription: Sending messages solely to gain XP in the Arcane bot and disrupting the chat, while also being unfair to the legitimate users.\n(Additional 1 Hour mute)\n1st Offense = 1 Week XP Blacklist\n2nd Offense = Level Reset + 1 Week XP blacklist\n3rd Offense = Level Reset + Permanent XP Blacklist`,
     color: "#ffffcc",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797126034067586/standard_10.gif?ex=68e5413a&is=68e3efba&hm=1e7e6ea034fb156d1744afcca8a41aa67c3bfa260d2834ec98b55125d5c490f7&=&width=1214&height=70"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797126034067586/standard_10.gif"
   },
   opt2: {
     title: " **Channel Misuses**",
-    desc: `Channel misuses fall under the 1 Warning Rules category.\n\n
-**Chatting Channel Misuse**\nUsing chat channels for non-chat purposes (e.g. bot commands outside Bots channel).\n\n
-**Macro Channels Misuse**\nUsing macro category channels incorrectly.\nPunishments:\n1 Warn = Reminder\n2 Warn = 1 Day Blacklist\n3 Warn = 1 Week Blacklist\n\n
-**Community Channels Misuse**\nUsing community section for inappropriate purposes.\nPunishments similar to above.\n\n
-**Voice Channel Misuse**\nImproperly using voice channels (Additional 1h Mute)`,
+    desc: `Channel misuses fall under the 1 Warning Rules category, meaning any kind of misuse will result in 1 warning.\nAnd possibly a blacklist.\n\n
+*Chatting Channel Misuse*\nDescription: Using the chatting channels for purposes other than chatting\nIncludes: Bot commands outside of the Bots channel.\n\n
+*Private Server Misuse*\nDescription: Using private server channels without following the intended guidelines\n1x: Warn + 1 Day PS Channel Blacklist\n2x: Warn + 1 Week PS Channel Blacklist\n3x: Warn + Perm PS Channel Blacklist\nGuidelines stated in Rule Document and ⁠🌌・biomes⁠\n\n
+*Feature Request Misuse*\nDescription: Using feature request channels without following the intended guidelines\n1x: Warn + 1 Day FR Channel Blacklist\n2x: Warn + 1 Week FR Channel Blacklist\n3x: Warn + Perm FR Channel Blacklist\nGuidelines stated in the Rule Document and channel.\n\n
+*Aura Submission Misuse*\nDescription: Submitting anything that doesn’t follow the aura submission channel rules\nGuidelines stated in the Rule Document and ⁠Không có quyền truy cập\n\n
+*Voice Channel Misuse*\nDescription: Misusing / improperly utilizing the voice channels\n(Additional 1h Mute)`,
     color: "#7fe390",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127669710991/standard_7.gif?ex=68e5413a&is=68e3efba&hm=65e0a6e36b5505a2ae0bb80151c8d7adaaa14f28284698884929767a2d60d7d6&=&width=1214&height=70"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127669710991/standard_7.gif"
   },
   opt3: {
     title: " **2 Warning Rules**",
-    desc: `*Mod Bait*\nSending messages that appear punishable to provoke mods.\n\n
-*Accusation w/o Evidence*\nMaking wrongful claims without proof.\n\n
-*DM Harassment*\nHarassing members in DMs due to mutual server.\n\n
-*Discrimination*\nHarmful stereotyping (race, gender, religion...). Severe cases → Hate Speech.\n\n
-*Inappropriate/Suggestive Language*\nImplying sexual/offensive content.\n\n
-*Toxicity*\nDisruptive behavior without exceptions.\n\n
-*Advertising/Self Promotion*\nPromoting media for self-gain without permission.`,
+    desc: `*Inappropriate/Suggestive Language*\nDescriptions: Implying/Referencing something inappropriate, offensive, or sexual.\nDepending on the severity, this can go up to 3 Warnings or fall into NSFW.\n\n
+*Toxicity*\nDescription: Engaging in disruptive behavior that can be seen as disrespectful or toxic in any way.\n*Exceptions:* Harmless arguments, Disagreement about Sol’s RNG related topic, discussions, constructive criticism, debates, joking with consent\n\n
+*Advertising/Self Promotion*\nDescription: Promoting/Spreading one's media for self gain.\n*Exceptions:* With permission`,
     color: "#f0954b",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127132975185/standard_8.gif?ex=68e5413a&is=68e3efba&hm=221f73c9be91bc85ffe0ae191f4a7989a1ab72d8a18abf4c3240efd1b296e937&=&width=1214&height=70"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797126462017546/standard_9.gif"
   },
   opt4: {
     title: " **3 Warning Rules**",
-    desc: `**Mod Bait**\nTrying to trick mods with borderline messages.\n\n
-**Accusation w/o Evidence**\nWrongful claims without evidence (severe = ban).\n\n
-**DM Harassment**\nHarassing users via DMs from mutual server.\n\n
-**Discrimination**\nExtreme harmful stereotyping (severe = Hate Speech).`,
+    desc: `*Mod Bait*\nDescription: Sending messages that appear punishable to provoke a reaction, even though they do not violate rules.\n\n
+*Accusation w/o Evidence*\nDescription: Making statements or claims about an individual wrongfully and without evidence to put them in a compromised situation\nDepending on the severity, this can lead to a ban.\n\n
+*DM Harassment*\nDescription: Harassing members via DM's due to having mutual access to the Sol's RNG server\n\n
+*Discrimination*\nDescription: Harmful stereotyping based on someone’s race, gender, sexuality, religion, or any other personal characteristics.\nDepending on the severity of the discrimination, extreme/severe cases can fall under “Hate Speech.”`,
     color: "#f4363f",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797126462017546/standard_9.gif?ex=68e5413a&is=68e3efba&hm=7c9a400ef5cb3191766d2acda6c6a457e48aeb1a2f229b8f7192853dc7eb3874&=&width=1214&height=70"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797125581213886/standard_11.gif"
   },
   opt5: {
     title: " **Instant Ban Rules**",
-    desc: `*Punishment Evading*\nLeaving to avoid punishment.\n\n
-*NSFW*\nPosting inappropriate sexual/explicit content.\n\n
-*Hate Speech/Racism*\nPromoting extreme discrimination.\n\n
-*Child Endangerment*\nAny act harming minors.\n\n
-*Cybercrimes*\nIllegal activity online.\n\n
-*Inappropriate Profile*\nOffensive/suggestive profile. Punishment = Kick → Ban if unchanged.`,
+    desc: `*Roblox & Discord ToS*\nDescription: This server will enforce the Terms of Service of both platforms, failure to follow them will result in a ban\nDiscord Community Guidelines\nDiscord ToS\nRoblox ToS\n\n
+*Punishment Evading*\nDescription: Leaving to avoid any punishment of any kind.\n\n
+*NSFW*\nDescription: Content that is inappropriate for any professional or public place, usually including nudity or suggestiveness of any kind.\n\n
+*Hate Speech/Racism*\nDescription: Any form of imagery / discussions that promotes extreme discrimination and hatred against individuals or groups based on their characteristics\n\n
+*Child Endangerment*\nDescription: Any act that puts minors at harm or inappropriate exposure.\n\n
+*Cybercrimes*\nDescription: Any form of illegal activity online\n\n
+*Inappropriate Profile*\nDescription: Using an inappropriate Discord profile picture, Discord display name, or Roblox username that contains offensive, suggestive, or explicit content.\nPunishments: Kick. If rejoined and unchanged, Ban`,
     color: "#f13bfe",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797125581213886/standard_11.gif?ex=68e5413a&is=68e3efba&hm=6a6d7f9fe9c882285eb89816c4fc0fbcdbd22c0060e42bbc2ea2a758c3eea547&=&width=1214&height=70"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127132975185/standard_8.gif"
   }
 };
