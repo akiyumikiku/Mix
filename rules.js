@@ -23,7 +23,7 @@ module.exports = {
 *Toxicity*\nDescription: Engaging in disruptive behavior that can be seen as disrespectful or toxic in any way.\n*Exceptions:* Harmless arguments, Disagreement about Sol’s RNG related topic, discussions, constructive criticism, debates, joking with consent\n\n
 *Advertising/Self Promotion*\nDescription: Promoting/Spreading one's media for self gain.\n*Exceptions:* With permission`,
     color: "#f0954b",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127132975185/standard_8.gif?ex=68e5413a&is=68e3efba&hm=221f73c9be91bc85ffe0ae191f4a7989a1ab72d8a18abf4c3240efd1b296e937&=&width=1318&height=76"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127132975185/standard_8.gif?ex=68e5413a&is=68e3efba&hm=221f73c9be91bc85ffe0ae191f4a7989a1ab72d8a18abf4c3240efd1b296e937&=&width=1214&height=70"
   },
   opt4: {
     title: " **3 Warning Rules**",
@@ -43,6 +43,6 @@ module.exports = {
 *Cybercrimes*\nDescription: Any form of illegal activity online\n\n
 *Inappropriate Profile*\nDescription: Using an inappropriate Discord profile picture, Discord display name, or Roblox username that contains offensive, suggestive, or explicit content.\nPunishments: Kick. If rejoined and unchanged, Ban`,
     color: "#f13bfe",
-    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797125581213886/standard_11.gif?ex=68e5413a&is=68e3efba&hm=6a6d7f9fe9c882285eb89816c4fc0fbcdbd22c0060e42bbc2ea2a758c3eea547&=&width=1318&height=76"
+    image: "https://media.discordapp.net/attachments/1411987904980586576/1424797125581213886/standard_11.gif?ex=68e5413a&is=68e3efba&hm=6a6d7f9fe9c882285eb89816c4fc0fbcdbd22c0060e42bbc2ea2a758c3eea547&=&width=1214&height=70"
   }
 };
