@@ -13,7 +13,7 @@ module.exports = {
     desc: `Channel misuses fall under the 1 Warning Rules category, meaning any kind of misuse will result in 1 warning.\nAnd possibly a blacklist.\n\n
 **Chatting Channel Misuse**\nDescription: Using the chatting channels for purposes other than chatting\nIncludes: Bot commands outside of the Bots channel.\n\n
 **Webhook Channel Misuse**\nDesctription: Using the channel for the wrong purpose\n*1x: Warn + 1 Day Webhook Channel Blacklist*\n*2x: Warn + 1 Week Webhook Channel Blacklist*\n*3x: Warn + Perm Webhook Channel Blacklist*\n\n
-**Macro Request Channel Misuse**\nDescription: Using macro request channels without following the intended guidelines\n1x: Warn + 1 Day MR Channel Blacklist\n2x: Warn + 1 Week MR Channel Blacklist\n3x: Warn + Perm MR Channel Blacklist.\n*Guidelines stated inhttps://discord.com/channels/1410980858583715970/1411034286429306940/1411037311625330810*⁠\n\n
+**Macro Request Channel Misuse**\nDescription: Using macro request channels without following the intended guidelines\n*1x: Warn + 1 Day MR Channel Blacklist*\n*2x: Warn + 1 Week MR Channel Blacklist*\n*3x: Warn + Perm MR Channel Blacklist*\n*Guidelines stated inhttps://discord.com/channels/1410980858583715970/1411034286429306940/1411037311625330810*⁠\n\n
 **Voice Channel Misuse**\nDescription: Misusing / improperly utilizing the voice channels\n(Additional 1h Mute)`,
     color: "#7fe390",
     image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127669710991/standard_7.gif"
