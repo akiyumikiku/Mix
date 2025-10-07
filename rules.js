@@ -2,9 +2,9 @@
 module.exports = {
   opt1: {
     title: " **1 Warning Rules**",
-    desc: `*Flooding/Spamming*\nDescription: Messages that occupy a large portion of the screen or involve the excessive posting of irrelevant content.\n*Exceptions:* Informative messages\n(Additional 1 Hour mute)\n\n
-*Excessive Begging*\nDescription: Repeatedly asking for favors, items, roles, privileges, or other benefits in an annoying or disruptive manner.\n*Exceptions:* Jokingly begging\n\n
-*XP Farming*\nDescription: Sending messages solely to gain XP in the Arcane bot and disrupting the chat, while also being unfair to the legitimate users.\n(Additional 1 Hour mute)\n1st Offense = 1 Week XP Blacklist\n2nd Offense = Level Reset + 1 Week XP blacklist\n3rd Offense = Level Reset + Permanent XP Blacklist`,
+    desc: `**Flooding/Spamming**\nDescription: Messages that occupy a large portion of the screen or involve the excessive posting of irrelevant content.\n*Exceptions:* Informative messages\n(Additional 1 Hour mute)\n\n
+**Excessive Begging**\nDescription: Repeatedly asking for favors, items, roles, privileges, or other benefits in an annoying or disruptive manner.\n*Exceptions: Jokingly begging*\n\n
+**XP Farming**\nDescription: Sending messages solely to gain XP in the Arcane bot and disrupting the chat, while also being unfair to the legitimate users.\n(Additional 1 Hour mute)\n*1st Offense = 1 Week XP Blacklist*\n*2nd Offense = Level Reset + 1 Week XP blacklist*\n*3rd Offense = Level Reset + Permanent XP Blacklist*`,
     color: "#ffffcc",
     image: "https://media.discordapp.net/attachments/1411987904980586576/1424797126034067586/standard_10.gif"
   },
@@ -13,7 +13,7 @@ module.exports = {
     desc: `Channel misuses fall under the 1 Warning Rules category, meaning any kind of misuse will result in 1 warning.\nAnd possibly a blacklist.\n\n
 **Chatting Channel Misuse**\nDescription: Using the chatting channels for purposes other than chatting\nIncludes: Bot commands outside of the Bots channel.\n\n
 **Webhook Channel Misuse**\nDesctription: Using the channel for the wrong purpose\n*1x: Warn + 1 Day Webhook Channel Blacklist*\n*2x: Warn + 1 Week Webhook Channel Blacklist*\n*3x: Warn + Perm Webhook Channel Blacklist*\n\n
-**Macro Request Channel Misuse**\nDescription: Using macro request channels without following the intended guidelines\n1x: Warn + 1 Day MR Channel Blacklist\n2x: Warn + 1 Week MR Channel Blacklist\n3x: Warn + Perm MR Channel Blacklist.\nGuidelineshttps://discord.com/channels/1410980858583715970/1411034286429306940/1411037311625330810⁠\n\n
+**Macro Request Channel Misuse**\nDescription: Using macro request channels without following the intended guidelines\n1x: Warn + 1 Day MR Channel Blacklist\n2x: Warn + 1 Week MR Channel Blacklist\n3x: Warn + Perm MR Channel Blacklist.\n*Guidelines stated inhttps://discord.com/channels/1410980858583715970/1411034286429306940/1411037311625330810*⁠\n\n
 **Voice Channel Misuse**\nDescription: Misusing / improperly utilizing the voice channels\n(Additional 1h Mute)`,
     color: "#7fe390",
     image: "https://media.discordapp.net/attachments/1411987904980586576/1424797127669710991/standard_7.gif"
@@ -36,7 +36,7 @@ module.exports = {
   },
   opt5: {
     title: " **Instant Ban Rules**",
-    desc: `*Roblox & Discord ToS*\nDescription: This server will enforce the Terms of Service of both platforms, failure to follow them will result in a ban\n[Discord Community Guidelines](https://discord.com/guidelines)\n[Discord Tos](https://discord.com/guidelines)\n[Roblox Tos](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use)",
+    desc: `*Roblox & Discord ToS*\nDescription: This server will enforce the Terms of Service of both platforms, failure to follow them will result in a ban\n[Discord Community Guidelines](https://discord.com/guidelines)\n[Discord Tos](https://discord.com/guidelines)\n[Roblox Tos](https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use)
 **Punishment Evading**\nDescription: Leaving to avoid any punishment of any kind.\n\n
 **NSFW**\nDescription: Content that is inappropriate for any professional or public place, usually including nudity or suggestiveness of any kind.\n\n
 **Hate Speech/Racism**\nDescription: Any form of imagery / discussions that promotes extreme discrimination and hatred against individuals or groups based on their characteristics\n\n
