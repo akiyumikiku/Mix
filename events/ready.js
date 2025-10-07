@@ -3,7 +3,7 @@ const { ActionRowBuilder, StringSelectMenuBuilder, Events } = require("discord.j
 
 module.exports = (client, CATEGORY_ID, RULES_CHANNEL_ID, renameChannel) => {
   const BOT_ROLE_ID = "1411639327909220352"; // Role bot
-  const MAIN_MESSAGE_ID = "1424089527751807101"; // ID tin nhắn menu
+  const MAIN_MESSAGE_ID = "1425029717131526196"; // ID tin nhắn menu
   const TARGET_ROLES = ["1410990099042271352", "1411991634194989096"];
 
   // =============================
