@@ -1,6 +1,7 @@
 const BASE_ROLE_ID = "1415319898468651008";
 const AUTO_ROLE_ID = "1411240101832298569";
 const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
+const SPECIAL_PROTECT_ROLE_ID = "1411991634194989096"; // role này chặn block-role
 
 const BLOCK_ROLE_IDS = [
   "1411639327909220352","1411085492631506996","1418990676749848576","1410988790444458015",
@@ -15,28 +16,42 @@ async function updateMemberRoles(member) {
   try {
     if (member.user.bot) return;
 
-    const hasBaseRole = member.roles.cache.has(BASE_ROLE_ID);
-    const hasAnyBlockRole = member.roles.cache.some(r => BLOCK_ROLE_IDS.includes(r.id));
+    const roles = member.roles.cache;
+    const hasBase = roles.has(BASE_ROLE_ID);
+    const hasAuto = roles.has(AUTO_ROLE_ID);
+    const hasRemove = roles.has(REMOVE_IF_HAS_ROLE_ID);
+    const hasProtect = roles.has(SPECIAL_PROTECT_ROLE_ID);
+    const hasBlock = roles.some(r => BLOCK_ROLE_IDS.includes(r.id));
 
-    if (!hasBaseRole && !hasAnyBlockRole) {
+    // --- Bước 1: Xử lý BLOCK ROLE ---
+    if (hasProtect) {
+      // Nếu có SPECIAL_PROTECT_ROLE_ID → xoá hết block roles ngay
+      for (const blockId of BLOCK_ROLE_IDS) {
+        if (roles.has(blockId)) {
+          await member.roles.remove(blockId).catch(() => {});
+          console.log(`🧹 Removed blocked role (${blockId}) from ${member.user.tag} (protected)`);
+        }
+      }
+    }
+
+    // --- Bước 2: Xử lý BASE ROLE ---
+    if (!hasBase && !hasAuto && !hasBlock) {
       await member.roles.add(BASE_ROLE_ID).catch(() => {});
-      console.log(`✅ Added base role for ${member.user.tag}`);
-    }
-    if (hasBaseRole && hasAnyBlockRole) {
+      console.log(`✅ Added base role to ${member.user.tag}`);
+    } 
+    else if (hasBase && (hasAuto || hasBlock)) {
       await member.roles.remove(BASE_ROLE_ID).catch(() => {});
-      console.log(`❌ Removed base role from ${member.user.tag} (has block role)`);
+      console.log(`❌ Removed base role from ${member.user.tag}`);
     }
 
-    const hasAutoRole = member.roles.cache.has(AUTO_ROLE_ID);
-    const hasRemoveRole = member.roles.cache.has(REMOVE_IF_HAS_ROLE_ID);
-
-    if (!hasAutoRole && !hasRemoveRole) {
+    // --- Bước 3: Xử lý AUTO ROLE ---
+    if (!hasAuto && !hasRemove) {
       await member.roles.add(AUTO_ROLE_ID).catch(() => {});
-      console.log(`✅ Added auto role for ${member.user.tag}`);
-    }
-    if (hasAutoRole && hasRemoveRole) {
+      console.log(`✅ Added auto role to ${member.user.tag}`);
+    } 
+    else if (hasAuto && hasRemove) {
       await member.roles.remove(AUTO_ROLE_ID).catch(() => {});
-      console.log(`❌ Removed auto role from ${member.user.tag} (has remove role)`);
+      console.log(`❌ Removed auto role from ${member.user.tag} (has remove-role)`);
     }
 
   } catch (err) {
