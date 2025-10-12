@@ -4,8 +4,9 @@
   "description": "Discord bot with /help and /report commands",
   "main": "index.js",
   "scripts": {
+    "deploy": "node deploy-commands.js",
     "start": "npm run deploy && node index.js",
-    "deploy": "node deploy-commands.js"
+    "offline": "node utils/offlineServer.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
