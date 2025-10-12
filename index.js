@@ -1,14 +1,20 @@
-// index.js
-const { loadCache, saveCache, getCache } = require('./utils/cacheManager');
+// ===============================
+// 🧠 CACHE MANAGER TÍCH HỢP
+// ===============================
+const { loadCache, saveCache } = require('./utils/cacheManager');
 
-// khi bot khởi động:
+// ✅ Khi bot khởi động → tải lại cache
 loadCache();
 
-// khi bot sắp tắt:
+// ✅ Khi bot tắt → tự động lưu cache
 process.on('exit', saveCache);
 process.on('SIGINT', () => { saveCache(); process.exit(); });
 process.on('SIGTERM', () => { saveCache(); process.exit(); });
-// ====== Discord Bot ======
+
+
+// ===============================
+// 🤖 DISCORD BOT CHÍNH
+// ===============================
 const {
   Client,
   GatewayIntentBits,
@@ -20,17 +26,18 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
-// === Role updater import ===
-const { initRoleUpdater } = require("./functions/updateRoles"); // 👈 thêm dòng này
+// === Import auto role updater (tùy chọn) ===
+const { initRoleUpdater } = require("./functions/updateRoles"); // ⚙️ file riêng cho logic auto role
 
-// ==== Khởi tạo client ====
+
+// ==== Tạo Discord client ====
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,           // Quản lý server
-    GatewayIntentBits.GuildMembers,     // Lấy danh sách thành viên
+    GatewayIntentBits.GuildMembers,     // Theo dõi member join/leave
     GatewayIntentBits.GuildMessages,    // Theo dõi tin nhắn
     GatewayIntentBits.MessageContent,   // Đọc nội dung tin nhắn
-    GatewayIntentBits.GuildPresences,   // Theo dõi online/offline
+    GatewayIntentBits.GuildPresences,   // Theo dõi trạng thái online/offline
   ],
   partials: [
     Partials.Message,
@@ -41,49 +48,74 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// ==== Load commands ====
+
+// ===============================
+// 📦 LOAD COMMANDS
+// ===============================
 const commandsPath = path.join(__dirname, "commands");
-const commandFiles = fs
-  .readdirSync(commandsPath)
-  .filter((file) => file.endsWith(".js"));
-
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  if (command.data && command.data.name) {
-    client.commands.set(command.data.name, command);
-  } else {
-    console.warn(`⚠️ Command ${file} thiếu "data.name"`);
+if (fs.existsSync(commandsPath)) {
+  const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"));
+  for (const file of commandFiles) {
+    try {
+      const command = require(`./commands/${file}`);
+      if (command.data && command.data.name) {
+        client.commands.set(command.data.name, command);
+      } else {
+        console.warn(`⚠️ Command ${file} thiếu "data.name"`);
+      }
+    } catch (err) {
+      console.error(`❌ Lỗi khi load command ${file}:`, err);
+    }
   }
+} else {
+  console.warn("⚠️ Không tìm thấy thư mục 'commands'");
 }
 
-// ==== Load events ====
+
+// ===============================
+// ⚙️ LOAD EVENTS
+// ===============================
 const eventsPath = path.join(__dirname, "events");
-const eventFiles = fs
-  .readdirSync(eventsPath)
-  .filter((file) => file.endsWith(".js"));
-
-for (const file of eventFiles) {
-  const event = require(`./events/${file}`);
-  if (typeof event === "function") {
-    event(client);
-    console.log(`✅ Loaded event: ${file}`);
-  } else {
-    console.warn(`⚠️ Event ${file} không export function`);
+if (fs.existsSync(eventsPath)) {
+  const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith(".js"));
+  for (const file of eventFiles) {
+    try {
+      const event = require(`./events/${file}`);
+      if (typeof event === "function") {
+        event(client);
+        console.log(`✅ Loaded event: ${file}`);
+      } else {
+        console.warn(`⚠️ Event ${file} không export function`);
+      }
+    } catch (err) {
+      console.error(`❌ Lỗi khi load event ${file}:`, err);
+    }
   }
+} else {
+  console.warn("⚠️ Không tìm thấy thư mục 'events'");
 }
 
-// ==== Khi bot online ====
+
+// ===============================
+// 🟢 BOT ONLINE
+// ===============================
 client.once("ready", async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-  await initRoleUpdater(client); // 👈 Thêm dòng này để chạy role check khi bot online
+  if (typeof initRoleUpdater === 'function') {
+    await initRoleUpdater(client); // 🔁 chạy auto role updater
+  }
 });
 
-// ==== Keep Alive (cho hosting free, ví dụ Replit) ====
+
+// ===============================
+// 🌐 KEEP ALIVE SERVER (cho hosting free như Replit)
+// ===============================
 const app = express();
 app.get("/", (req, res) => res.send("Bot vẫn online! ✅"));
-app.listen(process.env.PORT || 3000, () =>
-  console.log("🌐 Keep-alive server chạy")
-);
+app.listen(process.env.PORT || 3000, () => console.log("🌐 Keep-alive server chạy"));
 
-// ==== Login ====
+
+// ===============================
+// 🔑 LOGIN DISCORD
+// ===============================
 client.login(process.env.TOKEN);
