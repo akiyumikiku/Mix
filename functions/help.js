@@ -91,7 +91,7 @@ function createHelpEmbed() {
         "- Không gửi nội dung phản cảm, gây khó chịu hoặc độc hại.\n" +
         "- Tuân thủ nội quy server và hướng dẫn từ quản trị viên.\n\n" +
         "- Nếu gặp ai đó có những lời nói thô tục, tục tĩu mà bot không phản ứng hãy dùng ngay `/report` để report người đó và đợi các quản trị viên phản hồi \n" +
-        "Nếu bạn gặp sự cố hoặc lỗi, hãy báo qua hãy qua server [SuperNova Citadel [support]](https://discord.gg/G4xYf6FB) hoặc liên hệ với đội ngũ quản trị viên.",
+        "Nếu bạn gặp sự cố hoặc lỗi, hãy báo qua hãy qua server [SuperNova Citadel [support]](https://discord.gg/SA43DtSnX8) hoặc liên hệ với đội ngũ quản trị viên.",
       inline: false,
     })
 
