@@ -2,7 +2,7 @@
 const { getGuildCache, saveCache } = require("../utils/cacheManager");
 
 // ===== Role Logic =====
-const BASE_ROLE_ID = "1415319898468651008"; // chỉ add khi mất AUTO
+const BASE_ROLE_ID = "1415319898468651008"; // chỉ add khi có BLOCK_TRIGGER_ROLE
 const AUTO_ROLE_ID = "1411240101832298569"; // mất role này mới add BASE
 const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
 const SUPER_LOCK_ROLE_ID = "1411991634194989096"; // giờ chỉ để ẩn kênh
@@ -27,7 +27,7 @@ const SUPER_LOCK_HIDE_CHANNELS = [
 ];
 
 // === Role conflict logic mới ===
-const BLOCK_TRIGGER_ROLE = "1428898880447316159";
+const BLOCK_TRIGGER_ROLE = "1428898880447316159"; // chỉ khi có role này mới được add BASE
 const BLOCK_CONFLICT_ROLES = [
   "1428899156956549151",
   AUTO_ROLE_ID // "1411240101832298569"
@@ -91,9 +91,10 @@ async function updateMemberRoles(member) {
     const hasAuto = has(AUTO_ROLE_ID);
     const hasRemove = has(REMOVE_IF_HAS_ROLE_ID);
     const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
+    const hasTrigger = has(BLOCK_TRIGGER_ROLE);
 
     // 🚫 Nếu có BLOCK_TRIGGER_ROLE → gỡ các role xung đột
-    if (has(BLOCK_TRIGGER_ROLE)) {
+    if (hasTrigger) {
       for (const id of BLOCK_CONFLICT_ROLES) {
         if (has(id)) {
           await remove(id);
@@ -102,21 +103,17 @@ async function updateMemberRoles(member) {
       }
     }
 
-    // 1️⃣ Nếu có cả AUTO và BASE => gỡ BASE
-    if (hasBase && hasAuto) {
-      await remove(BASE_ROLE_ID);
-      return;
-    }
-
-    // 2️⃣ Nếu KHÔNG có AUTO_ROLE, KHÔNG bị block, KHÔNG có remove, KHÔNG có BASE → add BASE
-    if (!hasAuto && !hasBlock && !hasRemove && !hasBase) {
+    // ✅ BASE_ROLE chỉ khi có BLOCK_TRIGGER_ROLE
+    if (hasTrigger && !hasBase && !hasRemove && !hasBlock) {
       await add(BASE_ROLE_ID);
+    } else if (!hasTrigger && hasBase) {
+      await remove(BASE_ROLE_ID);
     }
 
-    // 3️⃣ AUTO_ROLE logic
-    if (!hasAuto && !hasRemove) {
+    // 3️⃣ AUTO_ROLE logic bình thường (trừ khi bị gỡ vì conflict)
+    if (!hasAuto && !hasRemove && !hasTrigger) {
       await add(AUTO_ROLE_ID);
-    } else if (hasAuto && hasRemove) {
+    } else if (hasAuto && (hasRemove || hasTrigger)) {
       await remove(AUTO_ROLE_ID);
     }
 
