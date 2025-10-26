@@ -6,7 +6,6 @@ const AUTO_ROLE_ID = "1411240101832298569";
 const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
 const SUPER_LOCK_ROLE_ID = "1411991634194989096";
 
-// Các role block
 const BLOCK_ROLE_IDS = [
   "1411639327909220352", "1411085492631506996", "1418990676749848576", "1410988790444458015",
   "1415322209320435732", "1415351613534503022", "1415350650165924002", "1415320304569290862",
@@ -30,14 +29,14 @@ const BLOCK_CONFLICT_ROLES = [
   AUTO_ROLE_ID
 ];
 
-// ==== MỚI THÊM ====
+// === Kênh & role ẩn ===
 const CATEGORY_HIDE_IF_NO_ROLE = [
   "1411043139728314478",
   "1411049289685270578",
   "1411034825699233943"
 ];
 
-const REQUIRED_ROLE_FOR_CATEGORIES = "1410990099042271352"; // phải có mới xem được 3 danh mục
+const REQUIRED_ROLE_FOR_CATEGORIES = "1410990099042271352"; // cần có mới xem được 3 danh mục
 const CHANNEL_3_1_RESTRICT = "1427958980059336774";
 const ROLE_3_1 = "1428899344010182756";
 
@@ -54,66 +53,36 @@ async function updateMemberRoles(member) {
     const roles = member.roles.cache;
     const has = id => roles.has(id);
     const add = async id => {
-      if (!has(id)) {
-        await member.roles.add(id).catch(() => {});
-        logAction(member, `+${id}`);
-      }
+      if (!has(id)) await member.roles.add(id).catch(() => {});
     };
     const remove = async id => {
-      if (has(id)) {
-        await member.roles.remove(id).catch(() => {});
-        logAction(member, `-${id}`);
-      }
+      if (has(id)) await member.roles.remove(id).catch(() => {});
     };
 
     // 🔒 SUPER_LOCK → ẩn 5 kênh
     if (has(SUPER_LOCK_ROLE_ID)) {
-      for (const channelId of SUPER_LOCK_HIDE_CHANNELS) {
-        const ch = member.guild.channels.cache.get(channelId);
+      for (const chId of SUPER_LOCK_HIDE_CHANNELS) {
+        const ch = member.guild.channels.cache.get(chId);
         if (!ch) continue;
-        const perms = ch.permissionOverwrites.cache.get(member.id);
-        if (!perms || !perms.deny.has("ViewChannel")) {
-          await ch.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
-        }
+        await ch.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
       }
     } else {
-      // Nếu không có SUPER_LOCK thì mở lại
-      for (const channelId of SUPER_LOCK_HIDE_CHANNELS) {
-        const ch = member.guild.channels.cache.get(channelId);
+      for (const chId of SUPER_LOCK_HIDE_CHANNELS) {
+        const ch = member.guild.channels.cache.get(chId);
         if (!ch) continue;
         const perms = ch.permissionOverwrites.cache.get(member.id);
         if (perms) await ch.permissionOverwrites.delete(member.id).catch(() => {});
       }
     }
 
-    // 🚫 Nếu có role cần thiết → xoá các role xung đột
-    if (has(BLOCK_TRIGGER_ROLE)) {
-      for (const id of BLOCK_CONFLICT_ROLES) {
-        if (has(id)) await remove(id);
-      }
-    }
-
-    // BASE_ROLE logic
-    const hasBase = has(BASE_ROLE_ID);
-    const hasAuto = has(AUTO_ROLE_ID);
-    const hasRemove = has(REMOVE_IF_HAS_ROLE_ID);
-    const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
-    const hasTrigger = has(BLOCK_TRIGGER_ROLE);
-
-    if (hasTrigger && !hasBase && !hasRemove && !hasBlock) await add(BASE_ROLE_ID);
-    else if (!hasTrigger && hasBase) await remove(BASE_ROLE_ID);
-
-    if (!hasAuto && !hasRemove && !hasTrigger) await add(AUTO_ROLE_ID);
-    else if (hasAuto && (hasRemove || hasTrigger)) await remove(AUTO_ROLE_ID);
-
-    // ======= ROLE NÂNG CẤP =======
-    const REQUIRED_ROLE = "1428898880447316159";
+    // ======= ROLE UPGRADE LOGIC =======
+    const REQUIRED_ROLE = "1428898880447316159"; // role cần thiết
     const roleUpgradeMap = {
-      "1431525750724362330": "1428899630753775626",
-      "1431525792365547540": "1410990099042271352",
-      "1431525824082870272": "1428899344010182756",
-      "1431525863987613877": "1428418711764865156",
-      "1431525890587885698": "1431525947684950016",
+      "1431525750724362330": "1428899630753775626", // #1 -> #1.1
+      "1431525792365547540": "1410990099042271352", // #2 -> #2.1
+      "1431525824082870272": "1428899344010182756", // #3 -> #3.1
+      "1431525863987613877": "1428418711764865156", // #4 -> #4.1
+      "1431525890587885698": "1431525947684950016", // #5 -> #5.1
     };
 
     if (has(REQUIRED_ROLE)) {
@@ -122,24 +91,16 @@ async function updateMemberRoles(member) {
       }
     }
 
+    // Nếu mất role thường thì mất role .1 tương ứng
     for (const [normalRole, upgradedRole] of Object.entries(roleUpgradeMap)) {
       if (!has(normalRole) && has(upgradedRole)) await remove(upgradedRole);
     }
 
-    // 🔐 ẨN KÊNH KHI KHÔNG CÓ ROLE BẮT BUỘC
+    // ======= ẨN / HIỆN KÊNH =======
     const guild = member.guild;
 
-    // 1️⃣ Nếu KHÔNG có 1410990099042271352 → ẩn tất cả các kênh trong 3 category
-    if (!has(REQUIRED_ROLE_FOR_CATEGORIES)) {
-      for (const categoryId of CATEGORY_HIDE_IF_NO_ROLE) {
-        const category = guild.channels.cache.get(categoryId);
-        if (!category) continue;
-        for (const ch of category.children.cache.values()) {
-          await ch.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
-        }
-      }
-    } else {
-      // Có role → hiện lại
+    // ✅ Nếu CÓ role 1410990099042271352 → hiện lại 3 danh mục
+    if (has(REQUIRED_ROLE_FOR_CATEGORIES)) {
       for (const categoryId of CATEGORY_HIDE_IF_NO_ROLE) {
         const category = guild.channels.cache.get(categoryId);
         if (!category) continue;
@@ -148,16 +109,25 @@ async function updateMemberRoles(member) {
           if (overwrite) await ch.permissionOverwrites.delete(member.id).catch(() => {});
         }
       }
+    } else {
+      // ❌ Nếu KHÔNG có → ẩn toàn bộ
+      for (const categoryId of CATEGORY_HIDE_IF_NO_ROLE) {
+        const category = guild.channels.cache.get(categoryId);
+        if (!category) continue;
+        for (const ch of category.children.cache.values()) {
+          await ch.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
+        }
+      }
     }
 
-    // 2️⃣ Nếu KHÔNG có role #3.1 → ẩn riêng 1 kênh
-    const specialChannel = guild.channels.cache.get(CHANNEL_3_1_RESTRICT);
-    if (specialChannel) {
-      if (!has(ROLE_3_1)) {
-        await specialChannel.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
+    // ✅ Nếu CÓ role #3.1 → hiện kênh 1427958980059336774
+    const specialCh = guild.channels.cache.get(CHANNEL_3_1_RESTRICT);
+    if (specialCh) {
+      if (has(ROLE_3_1)) {
+        const perms = specialCh.permissionOverwrites.cache.get(member.id);
+        if (perms) await specialCh.permissionOverwrites.delete(member.id).catch(() => {});
       } else {
-        const overwrite = specialChannel.permissionOverwrites.cache.get(member.id);
-        if (overwrite) await specialChannel.permissionOverwrites.delete(member.id).catch(() => {});
+        await specialCh.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
       }
     }
 
@@ -178,11 +148,11 @@ function logAction(member, action) {
     });
     if (guildCache.lastRoleActions.length > 200) guildCache.lastRoleActions.shift();
     saveCache();
-  } catch (e) {}
+  } catch {}
 }
 
 async function initRoleUpdater(client) {
-  console.log("🔄 Quét roles toàn bộ thành viên (lúc restart)...");
+  console.log("🔄 Quét roles toàn bộ thành viên (khi bot khởi động)...");
   for (const [, guild] of client.guilds.cache) {
     await guild.members.fetch().catch(() => {});
     for (const member of guild.members.cache.values()) {
@@ -193,14 +163,12 @@ async function initRoleUpdater(client) {
 }
 
 function registerRoleEvents(client) {
-  client.on("guildMemberUpdate", async (oldMember, newMember) => {
-    if (
-      oldMember.roles.cache.size !== newMember.roles.cache.size ||
-      [...oldMember.roles.cache.keys()].some(id => !newMember.roles.cache.has(id)) ||
-      [...newMember.roles.cache.keys()].some(id => !oldMember.roles.cache.has(id))
-    ) {
-      await updateMemberRoles(newMember);
-    }
+  client.on("guildMemberUpdate", async (oldM, newM) => {
+    const diff =
+      oldM.roles.cache.size !== newM.roles.cache.size ||
+      [...oldM.roles.cache.keys()].some(id => !newM.roles.cache.has(id)) ||
+      [...newM.roles.cache.keys()].some(id => !oldM.roles.cache.has(id));
+    if (diff) await updateMemberRoles(newM);
   });
 }
 
