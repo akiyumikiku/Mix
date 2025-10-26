@@ -27,9 +27,9 @@ const ROLE_UPGRADE_MAP = {
 const BLOCK_TRIGGER_ROLE = "1428898880447316159";
 const BLOCK_CONFLICT_ROLES = ["1428899156956549151", AUTO_ROLE_ID];
 
-// ✅ Cấu hình role cha–con cần theo dõi
+// ✅ Cấu hình quan hệ cha–con (#1 → #1.1)
 const ROLE_HIERARCHY = [
-  { parent: "1410990099042271352", child: "1431697157437784074" }, // #1 → #1.1
+  { parent: "1431525792365547540", child: "1431697157437784074" } // CHÍNH XÁC: #1 → #1.1
 ];
 
 // ====== Cache ======
@@ -41,7 +41,7 @@ async function updateMemberRoles(member) {
     if (!member || member.user?.bot) return;
 
     const now = Date.now();
-    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 5000) return;
+    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 4000) return;
     lastUpdate.set(member.id, now);
 
     const roles = member.roles.cache;
@@ -49,7 +49,8 @@ async function updateMemberRoles(member) {
     const toAdd = [];
     const toRemove = [];
 
-    console.log(`🧩 [CHECK] ${member.user.tag} → Roles hiện tại:`, [...roles.keys()]);
+    console.log(`\n[UPDATE] ${member.user.tag}`);
+    console.log("🧩 [CHECK] Roles hiện tại:", Array.from(roles.keys()));
 
     const hasBase = has(BASE_ROLE_ID);
     const hasAuto = has(AUTO_ROLE_ID);
@@ -74,8 +75,8 @@ async function updateMemberRoles(member) {
     if (has(REQUIRED_ROLE)) {
       for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
         if (has(normal) && !has(upgraded)) {
-          console.log(`🔼 [UPGRADE] Thêm role nâng cấp ${upgraded} cho ${member.user.tag}`);
-          await member.roles.add(upgraded).catch(err => console.error(`❌ Add role fail: ${upgraded}`, err));
+          console.log(`⏫ Thêm role nâng cấp ${upgraded} cho ${member.user.tag}`);
+          await member.roles.add(upgraded).catch(() => {});
         }
       }
     }
@@ -83,28 +84,30 @@ async function updateMemberRoles(member) {
     // ⬇️ Gỡ role nâng cấp khi mất role thường
     for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
       if (!has(normal) && has(upgraded) && !has(REQUIRED_ROLE)) {
-        console.log(`🔽 [DOWNGRADE] Xoá role nâng cấp ${upgraded} của ${member.user.tag}`);
-        await member.roles.remove(upgraded).catch(err => console.error(`❌ Remove upgraded role fail: ${upgraded}`, err));
+        console.log(`⏬ Gỡ role nâng cấp ${upgraded} vì mất role ${normal}`);
+        await member.roles.remove(upgraded).catch(() => {});
       }
     }
 
     // 🧠 Kiểm tra quan hệ cha–con (#1 → #1.1)
     for (const { parent, child } of ROLE_HIERARCHY) {
+      console.log(`🔍 [ROLE HIERARCHY] ${member.user.tag}: cóCha=${has(parent)} | cóCon=${has(child)}`);
       if (!has(parent) && has(child)) {
-        console.log(`🧹 [REMOVE] ${member.user.tag} mất role cha (${parent}) → xóa role con (${child})`);
-        await member.roles.remove(child, "Mất role cha nên xoá role con")
-          .then(() => console.log(`✅ Đã xoá role con ${child} của ${member.user.tag}`))
-          .catch(err => console.error(`❌ Không thể xoá role con ${child}:`, err));
+        console.log(`🚨 [ROLE HIERARCHY] ${member.user.tag} mất ${parent}, xoá ${child}`);
+        await member.roles.remove(child, "Mất role cha nên xoá role con").catch(err => {
+          console.error(`❌ Không xoá được role con ${child} khỏi ${member.user.tag}:`, err.message);
+        });
       }
     }
 
+    // Thêm/xóa role sau cùng
     if (toAdd.length) {
-      console.log(`➕ [ADD] ${member.user.tag} → ${toAdd.join(", ")}`);
-      await member.roles.add(toAdd).catch(err => console.error("❌ Add role error:", err));
+      console.log(`➕ Thêm roles: ${toAdd.join(", ")}`);
+      await member.roles.add(toAdd).catch(() => {});
     }
     if (toRemove.length) {
-      console.log(`➖ [REMOVE] ${member.user.tag} → ${toRemove.join(", ")}`);
-      await member.roles.remove(toRemove).catch(err => console.error("❌ Remove role error:", err));
+      console.log(`➖ Xoá roles: ${toRemove.join(", ")}`);
+      await member.roles.remove(toRemove).catch(() => {});
     }
 
   } catch (err) {
@@ -112,7 +115,7 @@ async function updateMemberRoles(member) {
   }
 }
 
-// ====== Khởi động ======
+// ====== Quét khi khởi động ======
 async function initRoleUpdater(client) {
   console.log("🔄 Quét roles toàn bộ thành viên (khởi động)...");
 
@@ -128,16 +131,19 @@ async function initRoleUpdater(client) {
   console.log("✅ Quét hoàn tất!");
 }
 
-// ====== Sự kiện role ======
+// ====== Lắng nghe sự kiện role update ======
 function registerRoleEvents(client) {
   client.on("guildMemberUpdate", async (oldMember, newMember) => {
     const oldRoles = [...oldMember.roles.cache.keys()];
     const newRoles = [...newMember.roles.cache.keys()];
-    const lostRoles = oldRoles.filter(r => !newRoles.includes(r));
-    const gainedRoles = newRoles.filter(r => !oldRoles.includes(r));
 
-    if (lostRoles.length || gainedRoles.length) {
-      console.log(`🎯 [EVENT] ${newMember.user.tag} thay đổi role → Mất: ${lostRoles.join(", ") || "không"}, Thêm: ${gainedRoles.join(", ") || "không"}`);
+    const lostRoles = oldRoles.filter(id => !newRoles.includes(id));
+    const gainedRoles = newRoles.filter(id => !oldRoles.includes(id));
+
+    if (lostRoles.length > 0 || gainedRoles.length > 0) {
+      console.log(`[UPDATE] ${newMember.user.tag}`);
+      if (lostRoles.length > 0) console.log("🧹 Mất roles:", lostRoles);
+      if (gainedRoles.length > 0) console.log("✨ Nhận roles:", gainedRoles);
       await updateMemberRoles(newMember);
     }
   });
