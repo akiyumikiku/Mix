@@ -1,6 +1,6 @@
-const { getGuildCache, saveCache } = require("../utils/cacheManager");
-await member.fetch(true).catch(() => {});
+// functions/updateRoles.js
 
+const { getGuildCache, saveCache } = require("../utils/cacheManager");
 
 // ====== Cấu hình ======
 const BASE_ROLE_ID = "1415319898468651008";
@@ -20,7 +20,7 @@ const BLOCK_ROLE_IDS = [
 const REQUIRED_ROLE = "1428898880447316159";
 const ROLE_UPGRADE_MAP = {
   "1431525750724362330": "1428899630753775626",
-  "1431525792365547540": "1410990099042271352", // #1
+  "1431525792365547540": "1410990099042271352",
   "1431525824082870272": "1428899344010182756",
   "1431525863987613877": "1428418711764865156",
   "1431525890587885698": "1431525947684950016"
@@ -29,18 +29,27 @@ const ROLE_UPGRADE_MAP = {
 const BLOCK_TRIGGER_ROLE = "1428898880447316159";
 const BLOCK_CONFLICT_ROLES = ["1428899156956549151", AUTO_ROLE_ID];
 
-// ✅ Cấu hình quan hệ cha–con (#1 → #1.1)
+// Quan hệ cha–con
 const ROLE_HIERARCHY = [
-  { parent: "1431525792365547540", child: "1431697157437784074" } // CHÍNH XÁC: #1 → #1.1
+  { parent: "1431525792365547540", child: "1431697157437784074" }
 ];
 
 // ====== Cache ======
 const lastUpdate = new Map();
 
-// ====== Hàm chính ======
+// ====== Hàm fetch member an toàn ======
+async function safeFetch(member) {
+  try {
+    await member.fetch(true);
+  } catch {}
+}
+
+// ====== Hàm cập nhật roles ======
 async function updateMemberRoles(member) {
   try {
     if (!member || member.user?.bot) return;
+
+    await safeFetch(member);
 
     const now = Date.now();
     if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 4000) return;
@@ -91,7 +100,7 @@ async function updateMemberRoles(member) {
       }
     }
 
-    // 🧠 Kiểm tra quan hệ cha–con (#1 → #1.1)
+    // 🧠 Kiểm tra quan hệ cha–con
     for (const { parent, child } of ROLE_HIERARCHY) {
       console.log(`🔍 [ROLE HIERARCHY] ${member.user.tag}: cóCha=${has(parent)} | cóCon=${has(child)}`);
       if (!has(parent) && has(child)) {
@@ -117,7 +126,7 @@ async function updateMemberRoles(member) {
   }
 }
 
-// ====== Quét khi khởi động ======
+// ====== Khởi tạo auto role ======
 async function initRoleUpdater(client) {
   console.log("🔄 Quét roles toàn bộ thành viên (khởi động)...");
 
