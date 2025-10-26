@@ -18,7 +18,7 @@ const BLOCK_ROLE_IDS = [
 const REQUIRED_ROLE = "1428898880447316159";
 const ROLE_UPGRADE_MAP = {
   "1431525750724362330": "1428899630753775626",
-  "1431525792365547540": "1410990099042271352",
+  "1431525792365547540": "1410990099042271352", // #1
   "1431525824082870272": "1428899344010182756",
   "1431525863987613877": "1428418711764865156",
   "1431525890587885698": "1431525947684950016"
@@ -26,6 +26,12 @@ const ROLE_UPGRADE_MAP = {
 
 const BLOCK_TRIGGER_ROLE = "1428898880447316159";
 const BLOCK_CONFLICT_ROLES = ["1428899156956549151", AUTO_ROLE_ID];
+
+// ✅ Cấu hình role cha–con cần theo dõi
+const ROLE_HIERARCHY = [
+  { parent: "1410990099042271352", child: "1431697157437784074" }, // #1 → #1.1
+  // Bạn có thể thêm nhiều dòng tương tự nếu có thêm role con
+];
 
 // ====== Cache ======
 const lastUpdate = new Map();
@@ -77,6 +83,14 @@ async function updateMemberRoles(member) {
       }
     }
 
+    // 🧠 Kiểm tra quan hệ cha–con (#1 → #1.1)
+    for (const { parent, child } of ROLE_HIERARCHY) {
+      if (!has(parent) && has(child)) {
+        await member.roles.remove(child, "Mất role cha nên xoá role con").catch(() => {});
+        console.log(`🧹 Xoá role con ${child} khỏi ${member.user.tag}`);
+      }
+    }
+
     // Thêm/xóa role sau cùng
     if (toAdd.length) await member.roles.add(toAdd).catch(() => {});
     if (toRemove.length) await member.roles.remove(toRemove).catch(() => {});
@@ -95,7 +109,7 @@ async function initRoleUpdater(client) {
     const members = guild.members.cache.filter(m => !m.user.bot);
     for (const member of members.values()) {
       await updateMemberRoles(member);
-      await new Promise(res => setTimeout(res, 200)); // chạy nhanh hơn nhưng vẫn an toàn
+      await new Promise(res => setTimeout(res, 150)); // giữ tốc độ nhanh hơn nhưng an toàn
     }
   }
 
