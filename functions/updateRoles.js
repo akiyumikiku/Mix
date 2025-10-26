@@ -1,4 +1,6 @@
 const { getGuildCache, saveCache } = require("../utils/cacheManager");
+await member.fetch(true).catch(() => {});
+
 
 // ====== Cấu hình ======
 const BASE_ROLE_ID = "1415319898468651008";
