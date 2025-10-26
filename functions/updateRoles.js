@@ -15,55 +15,43 @@ const BLOCK_ROLE_IDS = [
   "1415320854014984342", "1414165862205751326"
 ];
 
-const SUPER_LOCK_HIDE_CHANNELS = [
-  "1419727338119368784",
-  "1411049568979648553",
-  "1423207293335371776",
-  "1419725921363034123",
-  "1419725102412726292"
-];
-
-// Danh mục cần ẩn khi KHÔNG có role REMOVE_IF_HAS_ROLE_ID
-const CATEGORY_IDS_TO_HIDE = [
-  "1411043139728314478",
-  "1411049289685270578",
-  "1411034825699233943"
-];
-
-// Kênh riêng cần ẩn nếu KHÔNG có role 1428899344010182756
-const PRIVATE_CHANNEL_ID = "1428927402444325024";
-const PRIVATE_ROLE_ID = "1428899344010182756";
-
-// Role nâng cấp logic
 const REQUIRED_ROLE = "1428898880447316159";
 const ROLE_UPGRADE_MAP = {
-  "1431525750724362330": "1428899630753775626", // #1 → #1.1
-  "1431525792365547540": "1410990099042271352", // #2 → #2.1
-  "1431525824082870272": "1428899344010182756", // #3 → #3.1
-  "1431525863987613877": "1428418711764865156", // #4 → #4.1
-  "1431525890587885698": "1431525947684950016"  // #5 → #5.1
+  "1431525750724362330": "1428899630753775626",
+  "1431525792365547540": "1410990099042271352", // #1
+  "1431525824082870272": "1428899344010182756",
+  "1431525863987613877": "1428418711764865156",
+  "1431525890587885698": "1431525947684950016"
 };
 
 const BLOCK_TRIGGER_ROLE = "1428898880447316159";
 const BLOCK_CONFLICT_ROLES = ["1428899156956549151", AUTO_ROLE_ID];
 
-// ====== Cache và trạng thái ======
+// ✅ Quan hệ cha–con
+const ROLE_HIERARCHY = [
+  { parent: "1410990099042271352", child: "1431697157437784074" }, // #1 → #1.1
+  // Thêm nhiều nếu cần
+];
+
+// ====== Cache ======
 const lastUpdate = new Map();
-const channelState = new Map(); // memberId => { channelId: visible(bool) }
 
 // ====== Hàm chính ======
 async function updateMemberRoles(member) {
   try {
     if (!member || member.user?.bot) return;
+
     const now = Date.now();
-    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 8000) return;
+    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 5000) return;
     lastUpdate.set(member.id, now);
 
     const roles = member.roles.cache;
     const has = id => roles.has(id);
-
     const toAdd = [];
     const toRemove = [];
+
+    console.log(`👤 [CHECK] ${member.user.tag}`);
+    console.log("Hiện có:", [...roles.keys()].join(", "));
 
     const hasBase = has(BASE_ROLE_ID);
     const hasAuto = has(AUTO_ROLE_ID);
@@ -71,137 +59,110 @@ async function updateMemberRoles(member) {
     const hasTrigger = has(BLOCK_TRIGGER_ROLE);
     const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
 
-    // 🚫 Conflict xử lý
+    // ⚖️ Conflict role logic
     if (hasTrigger) {
-      for (const id of BLOCK_CONFLICT_ROLES) if (has(id)) toRemove.push(id);
+      for (const id of BLOCK_CONFLICT_ROLES) {
+        if (has(id)) {
+          console.log(`⚖️ Conflict: có ${id} khi có trigger → xóa`);
+          toRemove.push(id);
+        }
+      }
     }
 
-    // BASE ROLE logic
-    if (hasTrigger && !hasBase && !hasRemove && !hasBlock) toAdd.push(BASE_ROLE_ID);
-    else if (!hasTrigger && hasBase) toRemove.push(BASE_ROLE_ID);
+    // 🧩 BASE role logic
+    if (hasTrigger && !hasBase && !hasRemove && !hasBlock) {
+      console.log("🧩 Thêm BASE_ROLE");
+      toAdd.push(BASE_ROLE_ID);
+    } else if (!hasTrigger && hasBase) {
+      console.log("🧩 Gỡ BASE_ROLE (mất trigger)");
+      toRemove.push(BASE_ROLE_ID);
+    }
 
-    // AUTO ROLE logic
-    if (!hasAuto && !hasRemove && !hasTrigger) toAdd.push(AUTO_ROLE_ID);
-    else if (hasAuto && (hasRemove || hasTrigger)) toRemove.push(AUTO_ROLE_ID);
+    // 🤖 AUTO role logic
+    if (!hasAuto && !hasRemove && !hasTrigger) {
+      console.log("🤖 Thêm AUTO_ROLE");
+      toAdd.push(AUTO_ROLE_ID);
+    } else if (hasAuto && (hasRemove || hasTrigger)) {
+      console.log("🤖 Gỡ AUTO_ROLE (conflict)");
+      toRemove.push(AUTO_ROLE_ID);
+    }
 
-    // ⚙️ Thêm/gỡ role 1 lần (gom batch)
-    if (toAdd.length) await member.roles.add(toAdd).catch(() => {});
-    if (toRemove.length) await member.roles.remove(toRemove).catch(() => {});
-
-    // 🔁 Nâng cấp role
+    // ⬆️ Nâng cấp role
     if (has(REQUIRED_ROLE)) {
       for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
-        if (has(normal) && !has(upgraded)) await member.roles.add(upgraded).catch(() => {});
+        if (has(normal) && !has(upgraded)) {
+          console.log(`⬆️ Nâng cấp: ${normal} → ${upgraded}`);
+          await member.roles.add(upgraded).catch(err => console.error("❌ Add error:", err));
+        }
       }
     }
 
-    // 🔁 Gỡ role nâng cấp nếu mất role thường
+    // ⬇️ Gỡ role nâng cấp
     for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
       if (!has(normal) && has(upgraded) && !has(REQUIRED_ROLE)) {
-        await member.roles.remove(upgraded).catch(() => {});
+        console.log(`⬇️ Gỡ role nâng cấp: ${upgraded} (mất ${normal})`);
+        await member.roles.remove(upgraded).catch(err => console.error("❌ Remove error:", err));
       }
     }
 
-    // 🔒 SUPER LOCK ẩn kênh
-    if (has(SUPER_LOCK_ROLE_ID)) {
-      for (const channelId of SUPER_LOCK_HIDE_CHANNELS) {
-        await setChannelVisibility(member, channelId, false);
-      }
-    } else {
-      for (const channelId of SUPER_LOCK_HIDE_CHANNELS) {
-        await setChannelVisibility(member, channelId, true);
-      }
-    }
-
-    // 🚫 Ẩn danh mục nếu KHÔNG có role REMOVE_IF_HAS_ROLE_ID
-    const shouldHideCategory = !has(REMOVE_IF_HAS_ROLE_ID);
-    for (const catId of CATEGORY_IDS_TO_HIDE) {
-      const category = member.guild.channels.cache.get(catId);
-      if (!category) continue;
-      for (const channel of category.children.cache.values()) {
-        await setChannelVisibility(member, channel.id, !shouldHideCategory);
+    // 🧠 Cha–con (#1 → #1.1)
+    for (const { parent, child } of ROLE_HIERARCHY) {
+      const hasParent = has(parent);
+      const hasChild = has(child);
+      console.log(`🔗 Kiểm tra cha–con: ${parent} ↔ ${child} | cóCha=${hasParent}, cóCon=${hasChild}`);
+      if (!hasParent && hasChild) {
+        console.log(`🧹 Xoá role con ${child} khỏi ${member.user.tag} (mất role cha)`);
+        await member.roles.remove(child, "Mất role cha nên xoá role con").catch(err => {
+          console.error(`❌ Lỗi khi xoá role con ${child}:`, err);
+        });
       }
     }
 
-    // 🚫 Ẩn kênh riêng nếu KHÔNG có PRIVATE_ROLE_ID
-    await setChannelVisibility(member, PRIVATE_CHANNEL_ID, has(PRIVATE_ROLE_ID));
+    // 🧾 Áp dụng thay đổi
+    if (toAdd.length) {
+      console.log("➕ Thêm:", toAdd);
+      await member.roles.add(toAdd).catch(err => console.error("❌ Add roles error:", err));
+    }
+    if (toRemove.length) {
+      console.log("➖ Gỡ:", toRemove);
+      await member.roles.remove(toRemove).catch(err => console.error("❌ Remove roles error:", err));
+    }
 
   } catch (err) {
     console.error("❌ updateMemberRoles error:", err);
   }
 }
 
-// ====== Hàm ẩn/hiện kênh có cache ======
-async function setChannelVisibility(member, channelId, visible) {
-  try {
-    if (!member.guild) return;
-    const prev = channelState.get(member.id)?.[channelId];
-    if (prev === visible) return; // Không đổi → bỏ qua
-
-    const channel = member.guild.channels.cache.get(channelId);
-    if (!channel) return;
-
-    if (visible) {
-      await channel.permissionOverwrites.delete(member.id).catch(() => {});
-    } else {
-      await channel.permissionOverwrites.edit(member.id, { ViewChannel: false }).catch(() => {});
-    }
-
-    if (!channelState.has(member.id)) channelState.set(member.id, {});
-    channelState.get(member.id)[channelId] = visible;
-  } catch (err) {
-    console.warn("⚠️ setChannelVisibility failed:", err.message);
-  }
-}
-
-// ====== Log cache ======
-function logAction(member, action) {
-  try {
-    const guildCache = getGuildCache(member.guild.id);
-    guildCache.lastRoleActions = guildCache.lastRoleActions || [];
-    guildCache.lastRoleActions.push({
-      user: member.user?.tag || null,
-      userId: member.id,
-      action,
-      time: new Date().toISOString(),
-    });
-    if (guildCache.lastRoleActions.length > 200) guildCache.lastRoleActions.shift();
-    saveCache();
-  } catch (e) {
-    console.warn("logAction failed:", e.message);
-  }
-}
-
 // ====== Khởi động ======
 async function initRoleUpdater(client) {
-  console.log("🔄 Quét roles toàn bộ thành viên (lúc restart)...");
+  console.log("🔄 Quét roles toàn bộ thành viên (khởi động)...");
 
   for (const [, guild] of client.guilds.cache) {
     await guild.members.fetch().catch(() => {});
-    const members = guild.members.cache.filter(m =>
-      !m.user.bot &&
-      (m.roles.cache.has(REQUIRED_ROLE) ||
-       m.roles.cache.has(REMOVE_IF_HAS_ROLE_ID) ||
-       m.roles.cache.has(SUPER_LOCK_ROLE_ID))
-    );
-
+    const members = guild.members.cache.filter(m => !m.user.bot);
     for (const member of members.values()) {
       await updateMemberRoles(member);
-      await new Promise(res => setTimeout(res, 300)); // Nghỉ 0.3s giữa mỗi người
+      await new Promise(res => setTimeout(res, 150));
     }
   }
 
   console.log("✅ Quét hoàn tất!");
 }
 
-// ====== Theo dõi thay đổi role ======
+// ====== Sự kiện role ======
 function registerRoleEvents(client) {
   client.on("guildMemberUpdate", async (oldMember, newMember) => {
-    if (
-      oldMember.roles.cache.size !== newMember.roles.cache.size ||
-      [...oldMember.roles.cache.keys()].some(id => !newMember.roles.cache.has(id)) ||
-      [...newMember.roles.cache.keys()].some(id => !oldMember.roles.cache.has(id))
-    ) {
+    const oldRoles = [...oldMember.roles.cache.keys()];
+    const newRoles = [...newMember.roles.cache.keys()];
+    const roleChanged =
+      oldRoles.length !== newRoles.length ||
+      oldRoles.some(id => !newRoles.includes(id)) ||
+      newRoles.some(id => !oldRoles.includes(id));
+
+    if (roleChanged) {
+      console.log(`⚙️ [EVENT] Role thay đổi cho ${newMember.user.tag}`);
+      console.log(`Trước: ${oldRoles.join(", ")}`);
+      console.log(`Sau:   ${newRoles.join(", ")}`);
       await updateMemberRoles(newMember);
     }
   });
