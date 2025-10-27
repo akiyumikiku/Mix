@@ -23,12 +23,11 @@ module.exports = (client) => {
       // Nếu webhook hoạt động trong danh mục ngủ → chuyển về danh mục 1
       if (channel.parentId === CATEGORY_2) {
         const [username] = (channel.topic || "").split(" ");
-        const newName = `🛠★】${username || "unknown"}-macro`;
+const newName = `🛠★】${username || "unknown"}-macro`;
 
-        await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
-        await channel.setName(newName).catch(() => {});
-        console.log(`🔄 Kênh ${channel.name} được chuyển lại danh mục 1 (webhook hoạt động lại)`);
-      }
+await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
+await channel.setName(newName).catch(() => {});
+
 
       // Đặt lại hẹn giờ 1 ngày
       const timer = setTimeout(async () => {
