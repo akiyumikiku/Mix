@@ -1,75 +1,50 @@
 // handlers/channelActivity.js
 const { renameChannelByCategory } = require("../functions/rename");
-const { setTimeout: wait } = require("node:timers/promises");
 
-const CATEGORY_1 = "1411034825699233943"; // danh mục hoạt động
-const CATEGORY_2 = "1427958263281881088"; // danh mục ngủ
+const CATEGORY_1 = "1411034825699233943"; // hoạt động
+const CATEGORY_2 = "1427958263281881088"; // ngủ
 const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày
 
-// ===== HÀNG ĐỢI (QUEUE) GIÚP CHỐNG RATE LIMIT =====
-const renameQueue = [];
-let isProcessing = false;
-
-async function processQueue() {
-  if (isProcessing) return;
-  isProcessing = true;
-
-  while (renameQueue.length > 0) {
-    const task = renameQueue.shift();
-    try {
-      await task();
-    } catch (err) {
-      console.warn("⚠️ Task lỗi trong queue:", err.message);
-    }
-    await wait(1200); // mỗi lần cách nhau ~1.2s
-  }
-
-  isProcessing = false;
-}
-
-// ===== MODULE CHÍNH =====
 module.exports = (client) => {
   const inactivityTimers = new Map();
 
-  // === Khi webhook gửi tin ===
   client.on("messageCreate", async (msg) => {
     try {
       if (!msg.webhookId) return;
       const channel = msg.channel;
-      if (!channel?.parentId) return;
+      if (!channel || !channel.parentId) return;
 
-      // Đưa task rename vào queue
-      renameQueue.push(() => renameChannelByCategory(channel));
-      processQueue();
+      // ✅ Rename nhanh khi có webhook (nếu kênh chưa đúng)
+      await renameChannelByCategory(channel);
 
-      // Reset timer nếu có
+      // Reset timer cũ nếu có
       if (inactivityTimers.has(channel.id)) {
         clearTimeout(inactivityTimers.get(channel.id));
         inactivityTimers.delete(channel.id);
       }
 
-      // Nếu trong danh mục ngủ → chuyển về danh mục hoạt động
+      // Nếu webhook gửi trong danh mục ngủ → chuyển về danh mục hoạt động
       if (channel.parentId === CATEGORY_2) {
-        renameQueue.push(async () => {
-          await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
-          await wait(1500); // đợi Discord cập nhật
+        await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
+        console.log(`🔄 Đưa ${channel.name} → danh mục hoạt động (do có webhook mới)`);
+
+        // 💡 Đợi Discord sync rồi rename lại
+        setTimeout(async () => {
           await renameChannelByCategory(channel);
-          console.log(`🔄 Đưa ${channel.name} → danh mục hoạt động (do có webhook mới)`);
-        });
-        processQueue();
+        }, 1500); // 1.5s là điểm "vàng"
       }
 
-      // Đặt hẹn giờ tự chuyển về danh mục ngủ
+      // Đặt lại hẹn giờ tự move sau 1 ngày không có webhook
       const timer = setTimeout(async () => {
         try {
           if (channel.parentId === CATEGORY_1) {
-            renameQueue.push(async () => {
-              await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
-              await wait(1500);
+            await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
+            console.log(`📦 Chuyển ${channel.name} → danh mục ngủ (1 ngày không có webhook)`);
+
+            // 💡 Lại đợi chút cho Discord sync rồi rename
+            setTimeout(async () => {
               await renameChannelByCategory(channel);
-              console.log(`📦 Chuyển ${channel.name} → danh mục ngủ (1 ngày không có webhook)`);
-            });
-            processQueue();
+            }, 1500);
           }
         } catch (err) {
           console.error("❌ Lỗi khi chuyển danh mục:", err);
@@ -82,29 +57,23 @@ module.exports = (client) => {
     }
   });
 
-  // === Khi kênh được tạo ===
   client.on("channelCreate", async (channel) => {
-    renameQueue.push(() => renameChannelByCategory(channel));
-    processQueue();
+    await renameChannelByCategory(channel);
   });
 
-  // === Khi kênh đổi danh mục ===
   client.on("channelUpdate", async (oldCh, newCh) => {
     try {
       if (!newCh || newCh.type !== 0) return;
       if (oldCh.parentId !== newCh.parentId) {
-        renameQueue.push(async () => {
-          await wait(1000); // chờ Discord đồng bộ parentId
+        setTimeout(async () => {
           await renameChannelByCategory(newCh);
-        });
-        processQueue();
+        }, 1500); // 1.5s delay giúp rename chính xác
       }
     } catch (err) {
       console.error("❌ Lỗi channelUpdate:", err);
     }
   });
 
-  // === Khi kênh bị xóa ===
   client.on("channelDelete", (channel) => {
     if (inactivityTimers.has(channel.id)) {
       clearTimeout(inactivityTimers.get(channel.id));
