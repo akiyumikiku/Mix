@@ -1,28 +1,31 @@
 // functions/rename.js
 async function renameChannelByCategory(channel) {
   try {
-    const CATEGORY_1 = process.env.CATEGORY_ID; // Danh mục 1
-    const CATEGORY_2 = "1427958263281881088";   // Danh mục 2
+    const CATEGORY_1 = "1411034825699233943";              // 🛠 danh mục hoạt động
+    const CATEGORY_2 = "1427958263281881088";       // ⏰ danh mục ngủ
 
-    if (!channel || !channel.topic) return; // Không có topic thì bỏ qua
-
-    // Tách username từ topic ("username iduser")
+    if (!channel || !channel.topic) return;
     const [username] = channel.topic.split(" ");
     if (!username) return;
 
-    let newName;
+    // 🛠 Danh mục 1
     if (channel.parentId === CATEGORY_1) {
-      newName = `🛠★】${username}-macro`;
-    } else if (channel.parentId === CATEGORY_2) {
-      newName = `⏰★】${username}-macro`;
-    } else {
-      return; // Không thuộc 2 danh mục cần theo dõi
+      const newName = `🛠★】${username}-macro`;
+      if (channel.name !== newName) {
+        await channel.setName(newName).catch(() => {});
+        console.log(`🟢 Đổi tên: ${channel.name} → ${newName} (vào danh mục 1)`);
+      }
     }
 
-    if (channel.name !== newName) {
-      await channel.setName(newName);
-      console.log(`✅ Đổi tên: ${channel.name} → ${newName}`);
+    // ⏰ Danh mục 2
+    else if (channel.parentId === CATEGORY_2) {
+      const newName = `⏰★】${username}-macro`;
+      if (channel.name !== newName) {
+        await channel.setName(newName).catch(() => {});
+        console.log(`🔵 Đổi tên: ${channel.name} → ${newName} (vào danh mục 2)`);
+      }
     }
+
   } catch (err) {
     console.error("❌ Lỗi renameChannelByCategory:", err);
   }
