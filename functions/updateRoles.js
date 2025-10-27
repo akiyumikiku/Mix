@@ -1,8 +1,8 @@
 // functions/updateRoles.js
-const { Collection } = require("discord.js");
+
 const { getGuildCache, saveCache } = require("../utils/cacheManager");
 
-// ====== CONFIG ======
+// ====== Cấu hình ======
 const BASE_ROLE_ID = "1415319898468651008";
 const AUTO_ROLE_ID = "1411240101832298569";
 const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
@@ -29,133 +29,153 @@ const ROLE_UPGRADE_MAP = {
 const BLOCK_TRIGGER_ROLE = "1428898880447316159";
 const BLOCK_CONFLICT_ROLES = ["1428899156956549151", AUTO_ROLE_ID];
 
-// Tự động nối role upgrade vào role hierarchy
 const ROLE_HIERARCHY = [
-  { parent: "1431525792365547540", child: "1431697157437784074" },
-  ...Object.entries(ROLE_UPGRADE_MAP).map(([p, c]) => ({ parent: p, child: c }))
+  { parent: "1431525792365547540", child: "1431697157437784074" }
 ];
 
-// ====== CACHE / QUEUE ======
+// ====== Cache + Hàng đợi ======
 const lastUpdate = new Map();
-const roleQueue = new Collection(); // Map<guildId, Array<Function>>
+const queue = [];
+let processing = false;
 
-// ====== Utility: Delay ======
+// ====== Helper ======
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// ====== Safe fetch member ======
 async function safeFetch(member) {
   try { await member.fetch(true); } catch {}
 }
 
-// ====== Thêm tác vụ vào hàng đợi ======
-function queueAction(guildId, actionFn) {
-  if (!roleQueue.has(guildId)) {
-    roleQueue.set(guildId, []);
-    processQueue(guildId);
-  }
-  roleQueue.get(guildId).push(actionFn);
-}
-
-// ====== Xử lý hàng đợi theo guild ======
-async function processQueue(guildId) {
-  const queue = roleQueue.get(guildId);
-  if (!queue || queue.running) return;
-
-  queue.running = true;
-  while (queue.length > 0) {
-    const fn = queue.shift();
-    try { await fn(); } catch (err) {
-      console.error(`❌ [QUEUE ERROR]`, err.message);
+async function safeRoleAction(action, member, roles, type) {
+  let success = false;
+  for (let attempt = 1; attempt <= 3 && !success; attempt++) {
+    try {
+      if (type === "add") await member.roles.add(roles);
+      else await member.roles.remove(roles);
+      success = true;
+      console.log(`✅ [${member.user.tag}] ${type === "add" ? "Đã thêm" : "Đã xoá"} roles sau ${attempt} lần thử`);
+    } catch (err) {
+      console.warn(`⚠️ [${member.user.tag}] Thử ${type} lần ${attempt} thất bại: ${err.message}`);
+      if (attempt < 3) await delay(1500 * attempt);
+      else console.error(`❌ [${member.user.tag}] Không thể ${type} roles sau 3 lần thử`);
     }
-    await delay(750); // nghỉ giữa mỗi hành động, tránh rate-limit
   }
-  queue.running = false;
 }
 
-// ====== Hàm chính ======
+// ====== Xử lý chính ======
 async function updateMemberRoles(member) {
   try {
     if (!member || member.user?.bot) return;
-    await safeFetch(member);
 
     const now = Date.now();
-    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 5000) return;
+    if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < 4000) return;
     lastUpdate.set(member.id, now);
+
+    await safeFetch(member);
 
     const roles = member.roles.cache;
     const has = id => roles.has(id);
     const toAdd = [];
     const toRemove = [];
 
-    // ⚙️ Logic role
+    console.log(`\n🔄 [UPDATE] ${member.user.tag}`);
+    console.log("🧩 [CHECK] Roles hiện tại:", Array.from(roles.keys()));
+
     const hasBase = has(BASE_ROLE_ID);
     const hasAuto = has(AUTO_ROLE_ID);
     const hasRemove = has(REMOVE_IF_HAS_ROLE_ID);
     const hasTrigger = has(BLOCK_TRIGGER_ROLE);
     const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
 
-    // Conflict roles
+    // ⚖️ Conflict role logic
     if (hasTrigger) {
       for (const id of BLOCK_CONFLICT_ROLES) if (has(id)) toRemove.push(id);
     }
 
-    // BASE role
+    // 🧩 BASE role logic
     if (hasTrigger && !hasBase && !hasRemove && !hasBlock) toAdd.push(BASE_ROLE_ID);
     else if (!hasTrigger && hasBase) toRemove.push(BASE_ROLE_ID);
 
-    // AUTO role
+    // 🤖 AUTO role logic
     if (!hasAuto && !hasRemove && !hasTrigger) toAdd.push(AUTO_ROLE_ID);
     else if (hasAuto && (hasRemove || hasTrigger)) toRemove.push(AUTO_ROLE_ID);
 
-    // Role upgrade
+    // ⬆️ Nâng cấp role khi có REQUIRED_ROLE
     if (has(REQUIRED_ROLE)) {
       for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
-        if (has(normal) && !has(upgraded)) toAdd.push(upgraded);
+        if (has(normal) && !has(upgraded)) {
+          console.log(`⏫ Thêm role nâng cấp ${upgraded} cho ${member.user.tag}`);
+          toAdd.push(upgraded);
+        }
       }
     }
+
+    // ⬇️ Gỡ role nâng cấp khi mất role thường
     for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
-      if (!has(normal) && has(upgraded) && !has(REQUIRED_ROLE)) toRemove.push(upgraded);
+      if (!has(normal) && has(upgraded) && !has(REQUIRED_ROLE)) {
+        console.log(`⏬ Gỡ role nâng cấp ${upgraded} vì mất role ${normal}`);
+        toRemove.push(upgraded);
+      }
     }
 
-    // Cha - Con
+    // 🧠 Kiểm tra quan hệ cha–con
     for (const { parent, child } of ROLE_HIERARCHY) {
-      if (!has(parent) && has(child)) toRemove.push(child);
+      console.log(`🔍 [ROLE HIERARCHY] ${member.user.tag}: cóCha=${has(parent)} | cóCon=${has(child)}`);
+      if (!has(parent) && has(child)) {
+        console.log(`🚨 [ROLE HIERARCHY] ${member.user.tag} mất ${parent}, xoá ${child}`);
+        toRemove.push(child);
+      }
     }
 
-    // 🧠 Xử lý role trong queue
-    if (toAdd.length > 0) {
-      queueAction(member.guild.id, async () => {
-        console.log(`➕ [${member.user.tag}] add roles: ${toAdd.join(", ")}`);
-        await member.roles.add(toAdd).catch(err => console.error("ADD ERR:", err.message));
-      });
-    }
-
-    if (toRemove.length > 0) {
-      queueAction(member.guild.id, async () => {
-        console.log(`➖ [${member.user.tag}] remove roles: ${toRemove.join(", ")}`);
-        await member.roles.remove(toRemove).catch(err => console.error("REMOVE ERR:", err.message));
-      });
-    }
-
+    // ===== Hàng đợi xử lý =====
+    queue.push({ member, toAdd, toRemove });
+    if (!processing) processQueue();
   } catch (err) {
     console.error("❌ updateMemberRoles error:", err);
   }
 }
 
-// ====== Khởi tạo ======
+// ====== Hàng đợi tuần tự ======
+async function processQueue() {
+  processing = true;
+
+  while (queue.length > 0) {
+    const { member, toAdd, toRemove } = queue.shift();
+
+    if (toAdd.length > 0) {
+      console.log(`➕ [${member.user.tag}] add roles: ${toAdd.join(", ")}`);
+      await safeRoleAction("add", member, toAdd, "add");
+      await delay(500);
+    }
+
+    if (toRemove.length > 0) {
+      console.log(`➖ [${member.user.tag}] remove roles: ${toRemove.join(", ")}`);
+      await safeRoleAction("remove", member, toRemove, "remove");
+      await delay(500);
+    }
+
+    await delay(300); // ngắt nhẹ giữa các member để tránh spam API
+  }
+
+  processing = false;
+}
+
+// ====== Khởi tạo auto role ======
 async function initRoleUpdater(client) {
-  console.log("🔄 Quét roles toàn bộ thành viên...");
+  console.log("🔄 Quét roles toàn bộ thành viên (khởi động)...");
+
   for (const [, guild] of client.guilds.cache) {
     await guild.members.fetch().catch(() => {});
     const members = guild.members.cache.filter(m => !m.user.bot);
     for (const member of members.values()) {
-      queueAction(guild.id, () => updateMemberRoles(member));
+      await updateMemberRoles(member);
+      await delay(200);
     }
   }
-  console.log("✅ Đã thêm toàn bộ vào queue!");
+
+  console.log("✅ Quét hoàn tất!");
 }
 
-// ====== Event ======
+// ====== Lắng nghe sự kiện role update ======
 function registerRoleEvents(client) {
   client.on("guildMemberUpdate", async (oldMember, newMember) => {
     const oldRoles = [...oldMember.roles.cache.keys()];
@@ -164,11 +184,14 @@ function registerRoleEvents(client) {
     const lostRoles = oldRoles.filter(id => !newRoles.includes(id));
     const gainedRoles = newRoles.filter(id => !oldRoles.includes(id));
 
-    if (lostRoles.length || gainedRoles.length) {
+    if (lostRoles.length > 0 || gainedRoles.length > 0) {
       console.log(`🔄 [UPDATE] ${newMember.user.tag}`);
-      queueAction(newMember.guild.id, () => updateMemberRoles(newMember));
+      if (lostRoles.length) console.log(`🧹 Mất roles: ${lostRoles.join(", ")}`);
+      if (gainedRoles.length) console.log(`✨ Nhận roles: ${gainedRoles.join(", ")}`);
+      await updateMemberRoles(newMember);
     }
   });
 }
 
 module.exports = { updateMemberRoles, initRoleUpdater, registerRoleEvents };
+
