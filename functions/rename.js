@@ -1,44 +1,36 @@
 // renameChannel.js
-async function renameChannel(channel, CATEGORY_ID) {
+async function renameChannelByCategory(channel) {
   try {
-    // --- 1️⃣ Nếu kênh KHÔNG nằm trong danh mục được chỉ định -> bỏ qua ---
-    if (channel.parentId !== CATEGORY_ID) return;
+    const CATEGORY_1 = "1411034825699233943"; // thay ID danh mục 1
+    const CATEGORY_2 = "1427958263281881088"; // thay ID danh mục 2
 
-    // --- 2️⃣ Nếu kênh có hậu tố -webhook -> đổi sang 🛠★】<username>-macro ---
-    if (channel.name.endsWith("-webhook")) {
-      const username = channel.name.replace("-webhook", "");
+    if (!channel || !channel.topic) return; // kênh không có topic thì bỏ qua
+
+    // lấy username từ topic ("username iduser")
+    const [username] = channel.topic.split(" ");
+    if (!username) return;
+
+    // Danh mục 1 → 🛠★】username-macro
+    if (channel.parentId === CATEGORY_1) {
       const newName = `🛠★】${username}-macro`;
-
       if (channel.name !== newName) {
         await channel.setName(newName);
-        console.log(`✅ Đổi tên kênh: ${channel.name} → ${newName}`);
+        console.log(`🛠 Đổi tên trong danh mục 1: ${channel.name} → ${newName}`);
       }
-      return;
     }
 
-    // --- 3️⃣ Nếu kênh nằm trong danh mục đặc biệt (1427958263281881088) ---
-    //     và có tên dạng 🛠★】<username>-macro thì đổi thành ⏰★】<username>-macro
-    //     hoặc ngược lại nếu chuyển ra khỏi danh mục đó.
-    const SPECIAL_CATEGORY = "1427958263281881088";
-
-    if (channel.parentId === SPECIAL_CATEGORY && channel.name.startsWith("🛠★】")) {
-      const username = channel.name.replace("🛠★】", "").replace("-macro", "");
+    // Danh mục 2 → ⏰★】username-macro
+    else if (channel.parentId === CATEGORY_2) {
       const newName = `⏰★】${username}-macro`;
       if (channel.name !== newName) {
         await channel.setName(newName);
-        console.log(`🔁 Đổi tên khi vào danh mục đặc biệt: ${channel.name} → ${newName}`);
-      }
-    } else if (channel.name.startsWith("⏰★】") && channel.parentId !== SPECIAL_CATEGORY) {
-      const username = channel.name.replace("⏰★】", "").replace("-macro", "");
-      const newName = `🛠★】${username}-macro`;
-      if (channel.name !== newName) {
-        await channel.setName(newName);
-        console.log(`🔁 Đổi tên khi ra khỏi danh mục đặc biệt: ${channel.name} → ${newName}`);
+        console.log(`⏰ Đổi tên trong danh mục 2: ${channel.name} → ${newName}`);
       }
     }
+
   } catch (err) {
-    console.error("❌ Lỗi renameChannel:", err);
+    console.error("❌ Lỗi renameChannelByCategory:", err);
   }
 }
 
-module.exports = { renameChannel };
+module.exports = { renameChannelByCategory };
