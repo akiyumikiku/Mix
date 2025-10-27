@@ -3,10 +3,10 @@ const { renameChannelByCategory } = require("../functions/rename");
 
 const CATEGORY_1 = "1411034825699233943"; // danh mục hoạt động
 const CATEGORY_2 = "1427958263281881088"; // danh mục ngủ
-const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày
+const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày không có webhook
 
 module.exports = (client) => {
-  const inactivityTimers = new Map();
+  const inactivityTimers = new Map(); // Lưu timer từng kênh
 
   // ===== Khi webhook gửi tin nhắn =====
   client.on("messageCreate", async (msg) => {
@@ -15,31 +15,25 @@ module.exports = (client) => {
       const channel = msg.channel;
       if (!channel || !channel.parentId) return;
 
-      // Reset timer cũ
+      // Reset lại timer (vì vừa có webhook mới)
       if (inactivityTimers.has(channel.id)) {
         clearTimeout(inactivityTimers.get(channel.id));
       }
 
-      // Nếu webhook hoạt động trong danh mục 2 → chuyển về danh mục 1
+      // Nếu webhook hoạt động trong danh mục ngủ → chuyển về danh mục hoạt động
       if (channel.parentId === CATEGORY_2) {
-        const [username] = (channel.topic || "").split(" ");
-        const newName = `🛠★】${username || "unknown"}-macro`;
-
         await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
-        await channel.setName(newName).catch(() => {});
-        console.log(`🛠 Đổi tên: ${channel.name} → ${newName} (vào danh mục 1)`);
+        await renameChannelByCategory(channel);
+        console.log(`🔄 Đưa ${channel.name} về danh mục hoạt động (do có webhook mới)`);
       }
 
-      // Đặt lại hẹn giờ 1 ngày không có webhook
+      // Đặt lại timer 1 ngày
       const timer = setTimeout(async () => {
         try {
           if (channel.parentId === CATEGORY_1) {
-            const [username] = (channel.topic || "").split(" ");
-            const newName = `⏰★】${username || "unknown"}-macro`;
-
             await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
-            await channel.setName(newName).catch(() => {});
-            console.log(`⏰ Đổi tên: ${channel.name} → ${newName} (vào danh mục 2)`);
+            await renameChannelByCategory(channel);
+            console.log(`📦 Chuyển ${channel.name} → danh mục ngủ (1 ngày không có webhook)`);
           }
         } catch (err) {
           console.error("❌ Lỗi khi chuyển danh mục:", err);
@@ -60,12 +54,9 @@ module.exports = (client) => {
       if (channel.parentId === CATEGORY_1) {
         const timer = setTimeout(async () => {
           try {
-            const [username] = (channel.topic || "").split(" ");
-            const newName = `⏰★】${username || "unknown"}-macro`;
-
             await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
-            await channel.setName(newName).catch(() => {});
-            console.log(`⏰ Đổi tên: ${channel.name} → ${newName} (vào danh mục 2)`);
+            await renameChannelByCategory(channel);
+            console.log(`📦 Chuyển ${channel.name} → danh mục ngủ (1 ngày không có webhook)`);
           } catch (err) {
             console.error("❌ Lỗi khi chuyển danh mục:", err);
           }
@@ -78,12 +69,13 @@ module.exports = (client) => {
     }
   });
 
-  // ===== Khi danh mục thay đổi =====
+  // ===== Khi kênh được chuyển danh mục =====
   client.on("channelUpdate", async (oldCh, newCh) => {
     try {
       if (!newCh || newCh.type !== 0) return;
-      if (oldCh.parentId === newCh.parentId) return;
-      await renameChannelByCategory(newCh);
+      if (oldCh.parentId !== newCh.parentId) {
+        await renameChannelByCategory(newCh);
+      }
     } catch (err) {
       console.error("❌ Lỗi channelUpdate:", err);
     }
