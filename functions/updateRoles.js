@@ -67,7 +67,7 @@ async function updateMemberRoles(member) {
 
     const hasBase = has(BASE_ROLE_ID);
     const hasAuto = has(AUTO_ROLE_ID);
-    const hasRemove = has(REMOVE_IF_HAS_ROLE_ID);
+    const hasRemove = REMOVE_IF_HAS_ROLE_ID.some(id => has(id));
     const hasTrigger = has(BLOCK_TRIGGER_ROLE);
     const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
 
