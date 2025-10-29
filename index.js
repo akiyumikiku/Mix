@@ -159,6 +159,48 @@ setInterval(() => {
   }
 }, 60_000);
 
+// ===============================
+// ♻️ AUTO RESTART + CACHE SAVE
+// ===============================
+
+// 🕒 Thời gian bot tự restart (tính theo giờ)
+const RESTART_INTERVAL_HOURS = 168; // 1 tuần = 168 giờ
+const RESTART_INTERVAL_MS = RESTART_INTERVAL_HOURS * 60 * 60 * 1000;
+console.log(`🕒 Bot sẽ tự restart sau ${RESTART_INTERVAL_HOURS} tiếng (~1 tuần).`);
+
+// 👉 Hàm restart an toàn (lưu cache trước khi thoát)
+async function safeRestart() {
+  console.log(`🕒 Đã đủ ${RESTART_INTERVAL_HOURS} tiếng — chuẩn bị restart bot...`);
+  console.log("💾 Đang lưu cache trước khi restart...");
+
+  try {
+    await saveCache(); // gọi hàm từ cacheManager
+    console.log("✅ Cache đã lưu xong!");
+  } catch (err) {
+    console.error("⚠️ Lỗi khi lưu cache:", err);
+  }
+
+  console.log("♻️ Đang khởi động lại tiến trình...");
+  process.exit(0); // Render sẽ tự khởi động lại container
+}
+
+// ⏰ Bộ hẹn giờ restart tự động
+setInterval(safeRestart, RESTART_INTERVAL_MS);
+
+// ===============================
+// 🚦 XỬ LÝ TẮT AN TOÀN (KHI NHẬN TÍN HIỆU)
+// ===============================
+process.on('SIGINT', async () => {
+  console.log("⚠️ Nhận tín hiệu SIGINT → Lưu cache & thoát an toàn.");
+  await saveCache();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log("⚠️ Nhận tín hiệu SIGTERM → Lưu cache & thoát an toàn.");
+  await saveCache();
+  process.exit(0);
+});
 
 // ===============================
 // 🔑 LOGIN DISCORD
