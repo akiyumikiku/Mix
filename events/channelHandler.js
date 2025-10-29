@@ -3,7 +3,7 @@ const { renameChannelByCategory } = require("../functions/rename");
 
 const CATEGORY_1 = "1411034825699233943"; // danh mục hoạt động
 const CATEGORY_2 = "1427958263281881088"; // danh mục ngủ
-const MACRO_ROLE = "1411240101832298569"; // role auto
+const MACRO_ROLE = "1411991634194989096"; // role auto
 const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày không có webhook
 
 module.exports = (client) => {
