@@ -4,7 +4,7 @@ const { getGuildCache, saveCache } = require("../utils/cacheManager");
 // ====== Cấu hình ======
 const BASE_ROLE_ID = "1415319898468651008";
 const AUTO_ROLE_ID = "1411240101832298569";
-const REMOVE_IF_HAS_ROLE_ID = "1410990099042271352";
+const REMOVE_IF_HAS_ROLE_ID = "1428898880447316159","1428899156956549151";
 const SUPER_LOCK_ROLE_ID = "1411991634194989096";
 
 const BLOCK_ROLE_IDS = [
