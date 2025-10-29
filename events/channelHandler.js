@@ -6,12 +6,9 @@ const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày
 const AUTO_ROLE_ID = "1411991634194989096"; // role auto add
 
 module.exports = (client) => {
-  const inactivityTimers = new Map(); // Timer từng kênh
-  const renameQueue = new Map();      // Queue mỗi kênh để tránh bỏ rename/setParent
+  const inactivityTimers = new Map();
+  const renameQueue = new Map();
 
-  // ===============================
-  // ⚡ Queue để xử lý rename/setParent an toàn
-  // ===============================
   async function safeRename(channel, fn) {
     const last = renameQueue.get(channel.id) || Promise.resolve();
     const next = last.then(async () => {
@@ -21,10 +18,7 @@ module.exports = (client) => {
     await next;
   }
 
-  // ===============================
-  // 🧹 Dọn sạch listener + timer khi bot restart
-  // ===============================
-  client.once("ready", async () => {
+  client.once("ready", () => {
     inactivityTimers.clear();
     console.log("🧹 Dọn sạch timer khi bot khởi động!");
   });
@@ -43,20 +37,50 @@ module.exports = (client) => {
 
       await safeRename(channel, async () => {
         if (channel.parentId === CATEGORY_2) {
+          const perms = channel.permissionOverwrites.cache.map(p => [p.id, p.allow.bitfield, p.deny.bitfield]);
           await channel.setParent(CATEGORY_1, { lockPermissions: false });
+          for (const [id, allow, deny] of perms) {
+            await channel.permissionOverwrites.edit(id, { allow, deny }).catch(() => {});
+          }
+          await renameChannelByCategory(channel);
           console.log(`🔄 Webhook mới → ${channel.name} về danh mục hoạt động`);
+
+          // Thêm lại role nếu có topic
+          if (channel.topic) {
+            const [userId] = channel.topic.split(" ");
+            const member = await channel.guild.members.fetch(userId).catch(() => null);
+            const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
+            if (member && role && !member.roles.cache.has(role.id)) {
+              await member.roles.add(role).catch(() => {});
+            }
+          }
         }
-        await renameChannelByCategory(channel);
       });
 
-      // Đặt timer 1 ngày không webhook
       const timer = setTimeout(async () => {
         try {
           await safeRename(channel, async () => {
             if (channel.parentId === CATEGORY_1) {
+              const perms = channel.permissionOverwrites.cache.map(p => [p.id, p.allow.bitfield, p.deny.bitfield]);
               await channel.setParent(CATEGORY_2, { lockPermissions: false });
+              for (const [id, allow, deny] of perms) {
+                await channel.permissionOverwrites.edit(id, { allow, deny }).catch(() => {});
+              }
               await renameChannelByCategory(channel);
               console.log(`💤 ${channel.name} không hoạt động 24h → chuyển danh mục ngủ`);
+
+              // Xóa role và gửi tin nhắn
+              if (channel.topic) {
+                const [userId] = channel.topic.split(" ");
+                const member = await channel.guild.members.fetch(userId).catch(() => null);
+                const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
+                if (member && role && member.roles.cache.has(role.id)) {
+                  await member.roles.remove(role).catch(() => {});
+                }
+                await channel.send({
+                  content: `<@${userId}>\nYour macro channel has been moved to the **sleeping** category because it has been inactive for a day.`
+                }).catch(() => {});
+              }
             }
           });
         } catch (err) {
@@ -79,31 +103,31 @@ module.exports = (client) => {
     try {
       await safeRename(channel, async () => {
         await renameChannelByCategory(channel);
-
-        // Nếu tạo trong danh mục hoạt động → add role
-        if (channel.parentId === CATEGORY_1 && channel.topic) {
-          const [userId] = channel.topic.split(" ");
-          try {
-            const member = await channel.guild.members.fetch(userId);
-            const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
-            if (member && role && !member.roles.cache.has(role.id)) {
-              await member.roles.add(role);
-              console.log(`✅ Thêm role cho ${member.user.tag} (${userId})`);
-            }
-          } catch (err) {
-            console.warn(`⚠️ Không thể add role cho ID ${userId}`);
-          }
-        }
       });
 
-      // Nếu nằm trong danh mục hoạt động → đặt timer chuyển sang ngủ
       if (channel.parentId === CATEGORY_1) {
         const timer = setTimeout(async () => {
           try {
             await safeRename(channel, async () => {
+              const perms = channel.permissionOverwrites.cache.map(p => [p.id, p.allow.bitfield, p.deny.bitfield]);
               await channel.setParent(CATEGORY_2, { lockPermissions: false });
+              for (const [id, allow, deny] of perms) {
+                await channel.permissionOverwrites.edit(id, { allow, deny }).catch(() => {});
+              }
               await renameChannelByCategory(channel);
               console.log(`💤 ${channel.name} không hoạt động 24h → chuyển danh mục ngủ`);
+
+              if (channel.topic) {
+                const [userId] = channel.topic.split(" ");
+                const member = await channel.guild.members.fetch(userId).catch(() => null);
+                const role = channel.guild.roles.cache.get(AUTO_ROLE_ID);
+                if (member && role && member.roles.cache.has(role.id)) {
+                  await member.roles.remove(role).catch(() => {});
+                }
+                await channel.send({
+                  content: `<@${userId}>\nYour macro channel has been moved to the **sleeping** category because it has been inactive for a day.`
+                }).catch(() => {});
+              }
             });
           } catch (err) {
             console.error("❌ Timer channelCreate lỗi:", err.message);
@@ -118,25 +142,55 @@ module.exports = (client) => {
   });
 
   // ===============================
-  // ⚙️ Khi kênh đổi danh mục (thủ công hoặc bot)
+  // ⚙️ Khi channel đổi danh mục (thủ công hoặc bot)
   // ===============================
   client.removeAllListeners("channelUpdate");
   client.on("channelUpdate", async (oldCh, newCh) => {
     try {
       if (!newCh || newCh.type !== 0) return;
-      if (oldCh.parentId !== newCh.parentId) {
-        await safeRename(newCh, async () => {
-          await renameChannelByCategory(newCh);
-          console.log(`🪄 ChannelUpdate: ${newCh.name} đổi danh mục`);
-        });
-      }
+      if (oldCh.parentId === newCh.parentId) return;
+
+      await safeRename(newCh, async () => {
+        const perms = newCh.permissionOverwrites.cache.map(p => [p.id, p.allow.bitfield, p.deny.bitfield]);
+        await renameChannelByCategory(newCh);
+
+        // Giữ nguyên quyền
+        for (const [id, allow, deny] of perms) {
+          await newCh.permissionOverwrites.edit(id, { allow, deny }).catch(() => {});
+        }
+
+        // Quản lý role và gửi tin nhắn
+        if (newCh.topic) {
+          const [userId] = newCh.topic.split(" ");
+          const member = await newCh.guild.members.fetch(userId).catch(() => null);
+          const role = newCh.guild.roles.cache.get(AUTO_ROLE_ID);
+
+          if (newCh.parentId === CATEGORY_2) {
+            if (member && role && member.roles.cache.has(role.id)) {
+              await member.roles.remove(role).catch(() => {});
+            }
+            await newCh.send({
+              content: `<@${userId}>\nYour macro channel has been moved to the **sleeping** category because it has been inactive for a day.`
+            }).catch(() => {});
+          } else if (newCh.parentId === CATEGORY_1) {
+            if (member && role && !member.roles.cache.has(role.id)) {
+              await member.roles.add(role).catch(() => {});
+            }
+            await newCh.send({
+              content: `<@${userId}>\nYour macro channel has been moved back to the **active** category.`
+            }).catch(() => {});
+          }
+        }
+
+        console.log(`🪄 ChannelUpdate: ${newCh.name} đổi danh mục`);
+      });
     } catch (err) {
       console.error("❌ channelUpdate lỗi:", err.message);
     }
   });
 
   // ===============================
-  // ❌ Khi channel bị xóa → dọn timer
+  // ❌ Khi channel bị xóa
   // ===============================
   client.removeAllListeners("channelDelete");
   client.on("channelDelete", (channel) => {
