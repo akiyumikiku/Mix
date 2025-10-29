@@ -37,8 +37,8 @@ function createHelpEmbed() {
     .addFields({
       name: "III. HỆ THỐNG SOL'S RNG (GLOBAL / AURA)",
       value:
-        " <@1380356714225995776> - <@1365663330160611490> \n" +
-        "`/link` — Liên kết tài khoản Roblox của bạn với bot\n" +
+        " <@1365663330160611490> \n" +
+        "`/linkuser roblox_username / /linkuser roblox_user_id` — Liên kết tài khoản Roblox của bạn với bot\n" +
         "`/statsfound discord_user (@user)` — Xem global aura của người dùng Discord\n" +
         "`/statsfound roblox_username (tên Roblox)` — Xem global aura theo tài khoản Roblox\n" +
         "`/collectedstatsfound` — Xem bảng xếp hạng người có collected stats cao nhất\n" +
