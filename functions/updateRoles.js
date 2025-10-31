@@ -52,7 +52,7 @@ async function updateMemberRoles(member) {
 
     const now = Date.now();
     if (lastUpdate.has(member.id) && now - lastUpdate.get(member.id) < UPDATE_COOLDOWN) {
-      console.log(`⚠️ [SKIP] Bỏ qua ${member.user.tag} do cooldown`);
+      console.log(`⚠️ [SKIP] ${member.user.tag} (cooldown)`);
       return;
     }
     lastUpdate.set(member.id, now);
@@ -63,13 +63,14 @@ async function updateMemberRoles(member) {
     const toRemove = new Set();
 
     console.log(`\n🔄 [UPDATE] ${member.user.tag}`);
-    console.log("🧩 [CHECK] Roles hiện tại:", Array.from(roles.keys()));
+    console.log("🧩 Roles hiện tại:", Array.from(roles.keys()));
 
     const hasBase = has(BASE_ROLE_ID);
     const hasAuto = has(AUTO_ROLE_ID);
     const hasRemove = REMOVE_IF_HAS_ROLE_ID.some(id => has(id));
     const hasTrigger = has(BLOCK_TRIGGER_ROLE);
     const hasBlock = [...roles.keys()].some(r => BLOCK_ROLE_IDS.includes(r));
+    const hasRequired = has(REQUIRED_ROLE);
 
     // ⚖️ Conflict roles
     if (hasTrigger) {
@@ -87,7 +88,7 @@ async function updateMemberRoles(member) {
     else if (hasAuto && (hasRemove || hasTrigger)) toRemove.add(AUTO_ROLE_ID);
 
     // ⬆️ Thêm role nâng cấp khi có role thường + REQUIRED_ROLE
-    if (has(REQUIRED_ROLE)) {
+    if (hasRequired) {
       for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
         if (has(normal) && !has(upgraded)) {
           console.log(`⏫ Thêm role nâng cấp ${upgraded} (gốc: ${normal})`);
@@ -104,24 +105,19 @@ async function updateMemberRoles(member) {
       }
     }
 
-    // 🧩 Kiểm tra thiếu base/nâng cấp (fix quan trọng)
+    // 🧩 Kiểm tra đồng bộ base/nâng cấp (phiên bản đã fix)
     for (const [normal, upgraded] of Object.entries(ROLE_UPGRADE_MAP)) {
       const hasNormal = has(normal);
       const hasUpgraded = has(upgraded);
 
-      // Nếu không có cả hai → thêm base
-      if (!hasNormal && !hasUpgraded) {
-        console.log(`🪶 Thêm role base ${normal} vì bị thiếu cả hai`);
-        toAdd.add(normal);
-      }
-
-      // Nếu có base mà thiếu upgrade + có REQUIRED_ROLE → thêm upgrade
-      if (hasNormal && !hasUpgraded && has(REQUIRED_ROLE)) {
-        console.log(`⏫ Thêm role nâng cấp ${upgraded} vì thiếu nâng cấp`);
+      // ❌ Không tự thêm base khi thiếu cả hai (tránh lỗi thêm role cha)
+      // ✅ Chỉ thêm upgrade nếu có base + REQUIRED_ROLE
+      if (hasNormal && !hasUpgraded && hasRequired) {
+        console.log(`⏫ Thêm role nâng cấp ${upgraded} vì có base + required`);
         toAdd.add(upgraded);
       }
 
-      // Nếu có upgrade mà thiếu base → xoá upgrade
+      // Nếu có upgrade nhưng mất base → xoá upgrade
       if (!hasNormal && hasUpgraded) {
         console.log(`🧹 Gỡ role nâng cấp ${upgraded} vì mất role base ${normal}`);
         toRemove.add(upgraded);
@@ -132,10 +128,8 @@ async function updateMemberRoles(member) {
     for (const { parent, child } of ROLE_HIERARCHY) {
       const hasParent = has(parent);
       const hasChild = has(child);
-      console.log(`🔍 [ROLE HIERARCHY] ${member.user.tag}: cóCha=${hasParent} | cóCon=${hasChild}`);
-
       if (!hasParent && hasChild) {
-        console.log(`🚨 [ROLE HIERARCHY] ${member.user.tag} mất ${parent}, xoá ${child}`);
+        console.log(`🚨 [ROLE HIERARCHY] Mất ${parent}, xoá ${child}`);
         toRemove.add(child);
       }
     }
@@ -145,11 +139,11 @@ async function updateMemberRoles(member) {
     const finalRemove = [...toRemove].filter(id => has(id));
 
     if (finalAdd.length > 0) {
-      console.log(`➕ [${member.user.tag}] add roles: ${finalAdd.join(", ")}`);
+      console.log(`➕ [${member.user.tag}] Add roles: ${finalAdd.join(", ")}`);
       await member.roles.add(finalAdd).catch(err => console.error(`❌ Lỗi add roles: ${err.message}`));
     }
     if (finalRemove.length > 0) {
-      console.log(`➖ [${member.user.tag}] remove roles: ${finalRemove.join(", ")}`);
+      console.log(`➖ [${member.user.tag}] Remove roles: ${finalRemove.join(", ")}`);
       await member.roles.remove(finalRemove).catch(err => console.error(`❌ Lỗi remove roles: ${err.message}`));
     }
 
@@ -195,7 +189,7 @@ function registerRoleEvents(client) {
     const gainedRoles = newRoles.filter(id => !oldRoles.includes(id));
 
     if (lostRoles.length > 0 || gainedRoles.length > 0) {
-      console.log(`\n🔄 [UPDATE] ${newMember.user.tag}`);
+      console.log(`\n🔄 [UPDATE EVENT] ${newMember.user.tag}`);
       if (lostRoles.length > 0) console.log("🧹 Mất roles:", lostRoles);
       if (gainedRoles.length > 0) console.log("✨ Nhận roles:", gainedRoles);
       await updateMemberRoles(newMember);
