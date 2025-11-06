@@ -1,20 +1,26 @@
 // functions/roleQueueManager.js
-const { updateMemberRoles } = require("./updateRoles");
-
 const queue = new Map();
+const processing = new Set();
+const { updateMemberRoles } = require("./updateRoles");
+const COOLDOWN = parseInt(process.env.UPDATE_COOLDOWN_MS || "4000", 10);
 
-// Quản lý chuỗi xử lý từng user
 function queueMember(member) {
-  if (!member || !member.id) return;
-
   const userId = member.id;
-  const previous = queue.get(userId) || Promise.resolve();
 
-  const next = (async () => {
-    await previous.catch(() => {});
-    await updateMemberRoles(member);
-    await new Promise(res => setTimeout(res, 300)); // nghỉ 300ms để tránh spam API
-  })();
+  // Nếu user đang đổi role liên tục → không xử lý ngay mà xếp hàng
+  if (processing.has(userId)) return;
+
+  processing.add(userId);
+
+  const last = queue.get(userId) || Promise.resolve();
+
+  const next = last
+    .catch(() => {})
+    .then(() => new Promise(r => setTimeout(r, COOLDOWN))) // Chống spam đổi role
+    .then(async () => {
+      await updateMemberRoles(member).catch(() => {});
+      processing.delete(userId);
+    });
 
   queue.set(userId, next);
 }
