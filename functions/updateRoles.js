@@ -20,6 +20,28 @@ const UPDATE_COOLDOWN = Number(process.env.UPDATE_COOLDOWN_MS || 4000);
 const MEMBER_SCAN_DELAY = Number(process.env.MEMBER_SCAN_DELAY_MS || 150);
 const FULL_SCAN_INTERVAL = Number(process.env.FULL_SCAN_INTERVAL_MIN || 10) * 60 * 1000;
 
+// ====== DANH SÁCH ROLE BLOCK BASE ======
+const BASE_BLOCK_LIST = [
+  "1415350765291307028",
+  "1415350143800049736",
+  "1415351029305704498",
+  "1415322385095332021",
+  "1415351226366689460",
+  "1415351362866380881",
+  "1415320304569290862",
+  "1415350650165924002",
+  "1415351613534503022",
+  "1417097393752506398",
+  "1420270612785401988",
+  "1415322209320435732",
+  "1420276021009322064",
+  "1415350457706217563",
+  "1415320854014984342",
+  "1414165862205751326",
+  "1411240101832298569",
+  "1428899156956549151"
+];
+
 // ====== Hàm hỗ trợ ======
 async function safeFetch(member) {
   try { await member.fetch(true); } catch {}
@@ -60,7 +82,7 @@ async function updateMemberRoles(member) {
       }
     }
 
-    // 🧩 BASE role logic
+    // 🧩 BASE role logic (theo nguyên tắc)
     if (hasTrigger && !hasBase && !hasRemove && !hasBlock) toAdd.add(BASE_ROLE_ID);
     else if (!hasTrigger && hasBase) toRemove.add(BASE_ROLE_ID);
 
@@ -94,6 +116,16 @@ async function updateMemberRoles(member) {
         console.log(`🚨 [ROLE HIERARCHY] Mất ${parent}, xoá ${child}`);
         toRemove.add(child);
       }
+    }
+
+    // 🧩 Logic “block BASE role” theo danh sách
+    const hasBaseBlock = BASE_BLOCK_LIST.some(id => has(id));
+    if (hasBaseBlock && hasBase) {
+      console.log(`🚫 Có role block BASE, xoá BASE_ROLE`);
+      toRemove.add(BASE_ROLE_ID);
+    } else if (!hasBaseBlock && !hasBase) {
+      console.log(`✅ Không có role block, thêm BASE_ROLE`);
+      toAdd.add(BASE_ROLE_ID);
     }
 
     // 🧹 Gộp xử lý add/remove 1 lần
@@ -143,10 +175,10 @@ async function initRoleUpdater(client) {
   }, FULL_SCAN_INTERVAL);
 }
 
-// ====== Theo dõi khi role cụ thể bị gỡ ======
+// ====== Theo dõi khi role cụ thể bị gỡ (ép add lại BASE) ======
 function setupRoleRemoveWatcher(client) {
-  const TARGET_ROLE = "1428899156956549151"; // role bị gỡ sẽ kích hoạt
-  const BASE_ROLE = BASE_ROLE_ID; // role cần add lại
+  const TARGET_ROLE = "1428899156956549151"; // role bị gỡ
+  const BASE_ROLE = BASE_ROLE_ID;
 
   client.on("guildMemberUpdate", async (oldMember, newMember) => {
     try {
@@ -159,11 +191,12 @@ function setupRoleRemoveWatcher(client) {
       const hadTarget = oldRoles.has(TARGET_ROLE);
       const hasTarget = newRoles.has(TARGET_ROLE);
 
-      // Nếu role TARGET bị gỡ (có trước mà giờ mất)
+      // Khi role bị gỡ
       if (hadTarget && !hasTarget) {
-        console.log(`🎯 [EVENT] ${newMember.user.tag} vừa bị gỡ role ${TARGET_ROLE}`);
-        // Chạy lại toàn bộ logic roles (theo nguyên tắc sẵn có)
-        await updateMemberRoles(newMember);
+        console.log(`🎯 [EVENT] ${newMember.user.tag} bị gỡ role ${TARGET_ROLE}, ép add lại BASE_ROLE`);
+        await newMember.roles.add(BASE_ROLE).catch(err =>
+          console.error(`❌ Lỗi add BASE_ROLE: ${err.message}`)
+        );
       }
     } catch (err) {
       console.error("❌ Role remove watcher error:", err);
