@@ -143,4 +143,32 @@ async function initRoleUpdater(client) {
   }, FULL_SCAN_INTERVAL);
 }
 
-module.exports = { updateMemberRoles, initRoleUpdater };
+// ====== Theo dõi khi role cụ thể bị gỡ ======
+function setupRoleRemoveWatcher(client) {
+  const TARGET_ROLE = "1428899156956549151"; // role bị gỡ sẽ kích hoạt
+  const BASE_ROLE = BASE_ROLE_ID; // role cần add lại
+
+  client.on("guildMemberUpdate", async (oldMember, newMember) => {
+    try {
+      if (!oldMember || !newMember) return;
+      if (newMember.user?.bot) return;
+
+      const oldRoles = oldMember.roles.cache;
+      const newRoles = newMember.roles.cache;
+
+      const hadTarget = oldRoles.has(TARGET_ROLE);
+      const hasTarget = newRoles.has(TARGET_ROLE);
+
+      // Nếu role TARGET bị gỡ (có trước mà giờ mất)
+      if (hadTarget && !hasTarget) {
+        console.log(`🎯 [EVENT] ${newMember.user.tag} vừa bị gỡ role ${TARGET_ROLE}`);
+        // Chạy lại toàn bộ logic roles (theo nguyên tắc sẵn có)
+        await updateMemberRoles(newMember);
+      }
+    } catch (err) {
+      console.error("❌ Role remove watcher error:", err);
+    }
+  });
+}
+
+module.exports = { updateMemberRoles, initRoleUpdater, setupRoleRemoveWatcher };
