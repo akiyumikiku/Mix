@@ -8,6 +8,7 @@ const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày không có webhook
 
 module.exports = (client) => {
   const inactivityTimers = new Map();
+  const recentlyMoved = new Set(); // 🧠 Thêm để tránh loop sau khi gửi notify
 
   async function updateRoleByCategory(channel, addRole) {
     try {
@@ -37,15 +38,22 @@ module.exports = (client) => {
     try {
       const userId = channel.topic?.match(/\d{17,20}/)?.[0];
       if (!userId) return;
+
+      // 🧠 Đánh dấu kênh vừa gửi notify, tránh loop ping
+      recentlyMoved.add(channel.id);
+
       if (type === "sleep") {
         await channel.send(
           `<@${userId}>\nYour macro channel has been moved to the **DORMANT** category due to 1 day of inactivity.`
         );
       } else if (type === "active") {
         await channel.send(
-          `<@${userId}>\nYour macro channel has been has been moved to the **MACRO|OPEN|** catelogry due reactivated.`
+          `<@${userId}>\nYour macro channel has been moved back to the **MACRO | OPEN |** category after reactivation.`
         );
       }
+
+      // 🧽 Sau 5 giây tự gỡ cờ tránh block event khác
+      setTimeout(() => recentlyMoved.delete(channel.id), 5000);
     } catch (err) {
       console.error("❌ Error sending notify:", err);
     }
@@ -57,6 +65,7 @@ module.exports = (client) => {
       if (!msg.webhookId) return;
       const channel = msg.channel;
       if (!channel || !channel.parentId) return;
+      if (recentlyMoved.has(channel.id)) return; // 🧠 tránh lặp lại event
 
       if (inactivityTimers.has(channel.id))
         clearTimeout(inactivityTimers.get(channel.id));
@@ -129,6 +138,7 @@ module.exports = (client) => {
   client.on("channelUpdate", async (oldCh, newCh) => {
     try {
       if (!newCh || newCh.type !== 0) return;
+      if (recentlyMoved.has(newCh.id)) return; // 🧠 tránh lặp sau notify
       if (oldCh.parentId !== newCh.parentId) {
         await renameChannelByCategory(newCh);
         if (newCh.parentId === CATEGORY_1) {
@@ -151,5 +161,6 @@ module.exports = (client) => {
       clearTimeout(inactivityTimers.get(channel.id));
       inactivityTimers.delete(channel.id);
     }
+    recentlyMoved.delete(channel.id); // 🧽 dọn flag khi xóa kênh
   });
 };
