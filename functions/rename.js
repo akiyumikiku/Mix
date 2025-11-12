@@ -1,14 +1,16 @@
 // functions/rename.js
-async function renameChannelByCategory(channel) {
+async function renameChannelByCategory(channel, isNew = false) {
   try {
     const CATEGORY_1 = "1411034825699233943"; // Danh mục hoạt động
     const CATEGORY_2 = "1427958263281881088"; // Danh mục ngủ
 
     if (!channel || !channel.topic) return;
 
+    // Lấy username từ topic
     const [username] = channel.topic.split(" ");
     if (!username) return;
 
+    // Xác định prefix mới theo danh mục
     let newPrefix;
     if (channel.parentId === CATEGORY_1) {
       newPrefix = "🛠★】";
@@ -16,23 +18,23 @@ async function renameChannelByCategory(channel) {
       newPrefix = "⏰★】";
     } else return;
 
-    // Tên lý tưởng theo username
-    const expectedBase = `${username}-macro`;
+    // Loại bỏ prefix cũ (nếu có)
+    const currentBase = channel.name.replace(/^([^\w]*)★】/, "");
 
-    // Lấy phần sau prefix (bỏ phần đầu như 🛠★】 hay ⏰★】)
-    const baseName = channel.name.replace(/^([^\w]*)★】/, "");
+    const expectedBase = `${username}-macro`;
 
     let newName;
 
-    // Nếu tên hiện tại KHÔNG chứa đúng username (kênh mới tạo)
-    if (!baseName.startsWith(expectedBase)) {
-      newName = `${newPrefix}${expectedBase}`; // tạo mới theo username
+    if (isNew || !currentBase.startsWith(expectedBase)) {
+      // 🔹 Nếu là kênh mới hoặc tên không khớp username → rename toàn bộ
+      newName = `${newPrefix}${expectedBase}`;
     } else {
-      // chỉ đổi prefix, giữ nguyên phần còn lại (vd: "x1🌸")
-      const rest = baseName.slice(expectedBase.length).trim(); 
+      // 🔹 Nếu tên đã đúng username → chỉ đổi prefix, giữ phần đuôi
+      const rest = currentBase.slice(expectedBase.length).trim(); // phần như "x1 🌸"
       newName = `${newPrefix}${expectedBase}${rest ? " " + rest : ""}`;
     }
 
+    // Đổi tên nếu khác
     if (channel.name !== newName) {
       await channel.setName(newName).catch(() => {});
       console.log(`✅ Đổi tên: ${channel.name} → ${newName}`);
@@ -44,12 +46,13 @@ async function renameChannelByCategory(channel) {
   }
 }
 
+// Tránh rename trùng lặp
 const renaming = new Set();
-async function safeRename(channel) {
+async function safeRename(channel, isNew = false) {
   if (renaming.has(channel.id)) return;
   renaming.add(channel.id);
   try {
-    await renameChannelByCategory(channel);
+    await renameChannelByCategory(channel, isNew);
   } finally {
     renaming.delete(channel.id);
   }
