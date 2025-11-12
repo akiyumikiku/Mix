@@ -1,5 +1,5 @@
 // events/channelHandler.js
-const { renameChannelByCategory } = require("../functions/rename");
+const { renameChannelByCategory, safeRename } = require("../functions/rename");
 
 const CATEGORY_1 = "1411034825699233943"; // danh mục hoạt động
 const CATEGORY_2 = "1427958263281881088"; // danh mục ngủ
@@ -9,11 +9,13 @@ const INACTIVITY_TIME = 1000 * 60 * 60 * 24; // 1 ngày không có webhook
 module.exports = (client) => {
   const inactivityTimers = new Map();
 
+  // ====== Cập nhật role ======
   async function updateRoleByCategory(channel, addRole) {
     try {
       const topic = channel.topic || "";
       const userId = topic.match(/\d{17,20}/)?.[0];
       if (!userId) return;
+
       const member = await channel.guild.members.fetch(userId).catch(() => null);
       if (!member) return;
 
@@ -33,6 +35,7 @@ module.exports = (client) => {
     }
   }
 
+  // ====== Gửi thông báo ======
   async function sendNotify(channel, type) {
     try {
       const userId = channel.topic?.match(/\d{17,20}/)?.[0];
@@ -43,7 +46,7 @@ module.exports = (client) => {
         );
       } else if (type === "active") {
         await channel.send(
-          `<@${userId}>\nYour macro channel has been has been moved to the **MACRO|OPEN|** catelogry due reactivated.`
+          `<@${userId}>\nYour macro channel has been moved to the **MACRO|OPEN|** category due to reactivation.`
         );
       }
     } catch (err) {
@@ -51,7 +54,7 @@ module.exports = (client) => {
     }
   }
 
-  // ===== Khi webhook gửi tin nhắn =====
+  // ====== Khi webhook gửi tin nhắn ======
   client.on("messageCreate", async (msg) => {
     try {
       if (!msg.webhookId) return;
@@ -65,7 +68,7 @@ module.exports = (client) => {
       if (channel.parentId === CATEGORY_2) {
         await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
         await new Promise((r) => setTimeout(r, 500));
-        await renameChannelByCategory(channel);
+        await renameChannelByCategory(channel); // chỉ đổi prefix
         await updateRoleByCategory(channel, true);
         await sendNotify(channel, "active");
         console.log(`🔄 Reactivated: ${channel.name}`);
@@ -77,7 +80,7 @@ module.exports = (client) => {
           if (channel.parentId === CATEGORY_1) {
             await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
             await new Promise((r) => setTimeout(r, 500));
-            await renameChannelByCategory(channel);
+            await renameChannelByCategory(channel); // chỉ đổi prefix
             await updateRoleByCategory(channel, false);
             await sendNotify(channel, "sleep");
             console.log(`📦 Moved ${channel.name} → DORMANT (1 day inactive)`);
@@ -93,10 +96,10 @@ module.exports = (client) => {
     }
   });
 
-  // ===== Khi kênh được tạo =====
+  // ====== Khi kênh được tạo ======
   client.on("channelCreate", async (channel) => {
     try {
-      await renameChannelByCategory(channel);
+      await safeRename(channel, true); // ⬅️ dùng safeRename(isNew=true) để rename chuẩn theo username
 
       if (channel.parentId === CATEGORY_1) {
         await updateRoleByCategory(channel, true);
@@ -104,6 +107,7 @@ module.exports = (client) => {
         await updateRoleByCategory(channel, false);
       }
 
+      // Đặt hẹn giờ auto move
       if (channel.parentId === CATEGORY_1) {
         const timer = setTimeout(async () => {
           try {
@@ -125,12 +129,12 @@ module.exports = (client) => {
     }
   });
 
-  // ===== Khi kênh được chuyển danh mục =====
+  // ====== Khi kênh đổi danh mục ======
   client.on("channelUpdate", async (oldCh, newCh) => {
     try {
       if (!newCh || newCh.type !== 0) return;
       if (oldCh.parentId !== newCh.parentId) {
-        await renameChannelByCategory(newCh);
+        await renameChannelByCategory(newCh); // chỉ đổi prefix
         if (newCh.parentId === CATEGORY_1) {
           await updateRoleByCategory(newCh, true);
           await sendNotify(newCh, "active");
@@ -145,7 +149,7 @@ module.exports = (client) => {
     }
   });
 
-  // ===== Khi kênh bị xóa =====
+  // ====== Khi kênh bị xóa ======
   client.on("channelDelete", (channel) => {
     if (inactivityTimers.has(channel.id)) {
       clearTimeout(inactivityTimers.get(channel.id));
