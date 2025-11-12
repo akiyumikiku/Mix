@@ -1,5 +1,5 @@
 // events/channelHandler.js
-const { renameChannelByCategory } = require("../functions/rename");
+const { renameChannelByCategory } = require("../functions/rename"); // Đảm bảo bạn dùng hàm đã sửa ở trên
 
 const CATEGORY_1 = "1411034825699233943"; // danh mục hoạt động
 const CATEGORY_2 = "1427958263281881088"; // danh mục ngủ
@@ -63,24 +63,40 @@ module.exports = (client) => {
 
       // Nếu webhook hoạt động trong danh mục ngủ → chuyển về danh mục hoạt động
       if (channel.parentId === CATEGORY_2) {
-        await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => {});
+        
+        // ================================================================
+        // SỬA 1: Hứng kênh đã cập nhật sau khi setParent
+        // ================================================================
+        const updatedChannel = await channel.setParent(CATEGORY_1, { lockPermissions: false }).catch(() => null);
+        if (!updatedChannel) return; // Nếu lỗi thì dừng
+
         await new Promise((r) => setTimeout(r, 500));
-        await renameChannelByCategory(channel);
-        await updateRoleByCategory(channel, true);
-        await sendNotify(channel, "active");
-        console.log(`🔄 Reactivated: ${channel.name}`);
+
+        // Dùng "updatedChannel" thay vì "channel"
+        await renameChannelByCategory(updatedChannel);
+        await updateRoleByCategory(updatedChannel, true);
+        await sendNotify(updatedChannel, "active");
+        console.log(`🔄 Reactivated: ${updatedChannel.name}`);
       }
 
       // Đặt lại hẹn giờ 1 ngày
       const timer = setTimeout(async () => {
         try {
           if (channel.parentId === CATEGORY_1) {
-            await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
+
+            // ================================================================
+            // SỬA 2: Hứng kênh đã cập nhật trong Timer
+            // ================================================================
+            const updatedChannel = await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => null);
+            if (!updatedChannel) return;
+
             await new Promise((r) => setTimeout(r, 500));
-            await renameChannelByCategory(channel);
-            await updateRoleByCategory(channel, false);
-            await sendNotify(channel, "sleep");
-            console.log(`📦 Moved ${channel.name} → DORMANT (1 day inactive)`);
+
+            // Dùng "updatedChannel" thay vì "channel"
+            await renameChannelByCategory(updatedChannel);
+            await updateRoleByCategory(updatedChannel, false);
+            await sendNotify(updatedChannel, "sleep");
+            console.log(`📦 Moved ${updatedChannel.name} → DORMANT (1 day inactive)`);
           }
         } catch (err) {
           console.error("❌ Error when moving to DORMANT:", err);
@@ -96,7 +112,7 @@ module.exports = (client) => {
   // ===== Khi kênh được tạo =====
   client.on("channelCreate", async (channel) => {
     try {
-      await renameChannelByCategory(channel);
+      await renameChannelByCategory(channel); // Cái này ok vì kênh vừa tạo
 
       if (channel.parentId === CATEGORY_1) {
         await updateRoleByCategory(channel, true);
@@ -107,12 +123,20 @@ module.exports = (client) => {
       if (channel.parentId === CATEGORY_1) {
         const timer = setTimeout(async () => {
           try {
-            await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => {});
+            
+            // ================================================================
+            // SỬA 3: Hứng kênh đã cập nhật trong Timer của channelCreate
+            // ================================================================
+            const updatedChannel = await channel.setParent(CATEGORY_2, { lockPermissions: false }).catch(() => null);
+            if (!updatedChannel) return;
+
             await new Promise((r) => setTimeout(r, 500));
-            await renameChannelByCategory(channel);
-            await updateRoleByCategory(channel, false);
-            await sendNotify(channel, "sleep");
-            console.log(`📦 Moved ${channel.name} → DORMANT (1 day inactive)`);
+
+            // Dùng "updatedChannel" thay vì "channel"
+            await renameChannelByCategory(updatedChannel);
+            await updateRoleByCategory(updatedChannel, false);
+            await sendNotify(updatedChannel, "sleep");
+            console.log(`📦 Moved ${updatedChannel.name} → DORMANT (1 day inactive)`);
           } catch (err) {
             console.error("❌ Error moving on create:", err);
           }
@@ -127,6 +151,7 @@ module.exports = (client) => {
 
   // ===== Khi kênh được chuyển danh mục =====
   client.on("channelUpdate", async (oldCh, newCh) => {
+    // File này tự dùng "newCh" (đối tượng kênh MỚI) nên nó đã đúng
     try {
       if (!newCh || newCh.type !== 0) return;
       if (oldCh.parentId !== newCh.parentId) {
