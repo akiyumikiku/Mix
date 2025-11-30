@@ -6,22 +6,28 @@ async function renameChannelByCategory(channel) {
 
     if (!channel) return;
 
-    // Lấy username từ topic (giữ như trước)
+    // Lấy username từ topic (như trước). Nếu topic rỗng, cố tìm userId trong topic.
     const topic = channel.topic || "";
-    const username = topic.split(" ")[0];
-    if (!username) return;
+    const username = topic.split(" ")[0] || null;
+    if (!username) {
+      // nếu không lấy được username thì không đổi tên (an toàn)
+      console.log(`⚠️ rename: no username in topic for channel ${channel.id}`);
+      return;
+    }
 
-    // Chọn tiền tố muốn thay
     let prefix = null;
     if (channel.parentId === CATEGORY_1) prefix = "🛠★】";
     else if (channel.parentId === CATEGORY_2) prefix = "⏰★】";
     else return;
 
-    // Nếu tên hiện tại có '】', giữ phần sau '】' nguyên vẹn (suffix)
+    // Lấy suffix: mọi thứ sau '】' nếu có, giữ nguyên (loại bỏ khoảng trắng thừa)
     let suffix = "";
     if (channel.name && channel.name.includes("】")) {
-      suffix = channel.name.split("】").slice(1).join("】"); // phần sau dấu '】' (giữ nguyên)
-      // Nếu suffix không chứa username thì đảm bảo username xuất hiện ở đầu suffix
+      // Lấy phần sau dấu '】' đầu tiên
+      const parts = channel.name.split("】");
+      parts.shift(); // bỏ phần trước '】'
+      suffix = parts.join("】").trim();
+      // Nếu suffix không chứa username thì thêm username vào đầu suffix (như cũ)
       if (!suffix.includes(username)) {
         suffix = `${username}-${suffix}`;
       }
@@ -30,12 +36,15 @@ async function renameChannelByCategory(channel) {
       suffix = `${username}-macro`;
     }
 
-    // Kết hợp prefix + suffix (giữ mọi kí tự phía sau nguyên vẹn)
     const newName = `${prefix}${suffix}`;
 
     if (channel.name !== newName) {
-      await channel.setName(newName).catch(() => {});
-      console.log(`✅ Đổi tên: ${channel.name} → ${newName}`);
+      try {
+        await channel.setName(newName);
+        console.log(`✅ Đổi tên: ${channel.name} → ${newName}`);
+      } catch (err) {
+        console.error("❌ setName error:", err, "channelId:", channel.id);
+      }
     } else {
       console.log(`⚙️ Giữ nguyên: ${channel.name}`);
     }
