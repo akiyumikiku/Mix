@@ -1,29 +1,31 @@
 // functions/webhookTracker.js
-const fs = require("fs");
+const fs = require("fs").promises;
 const path = require("path");
 
 const DATA_FILE = path.join(__dirname, "..", "data", "webhookActivity.json");
 
-// THAM SỐ
-const SIX_HOURS = 6 * 60 * 60 * 1000;       // 6 giờ (ms)
-const RESET_INACTIVE = 24 * 60 * 60 * 1000; // reset nếu 24 giờ không activity
-const SHORT_DIFF_MS = 5 * 60 * 1000;        // 5 phút, dùng cho tính totalActiveMsToday
+// time constants
+const SIX_HOURS = 6 * 60 * 60 * 1000;
+const RESET_INACTIVE = 24 * 60 * 60 * 1000;
+const SHORT_DIFF_MS = 5 * 60 * 1000;
 
-function loadData() {
-  if (!fs.existsSync(DATA_FILE)) return {};
+async function loadData() {
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) || {};
+    const exists = await fs.stat(DATA_FILE).then(() => true).catch(() => false);
+    if (!exists) return {};
+    const raw = await fs.readFile(DATA_FILE, "utf8");
+    return raw ? JSON.parse(raw) : {};
   } catch (e) {
-    console.error("❌ webhookActivity.json parse error, recreating file:", e);
+    console.error("❌ webhookTracker.loadData error:", e);
     return {};
   }
 }
 
-function saveData(data) {
+async function saveData(data) {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (e) {
-    console.error("❌ failed to save webhookActivity.json", e);
+    console.error("❌ webhookTracker.saveData error:", e);
   }
 }
 
@@ -40,14 +42,15 @@ function resetIfNeeded(record) {
   }
 }
 
-// ----- updateWebhookActivity(webhookId, channelId)
-// - mở rộng record nếu cần
-// - cập nhật totalActiveMsToday giống logic cũ
-// - xử lý streak: reset nếu > RESET_INACTIVE, +1 nếu >= SIX_HOURS
-// - ghi persist mapping channelId để checkWarnings có thể tìm kênh nhanh
-// Trả về: { added: bool, streak: number, wasReset: bool }
-module.exports.updateWebhookActivity = function (webhookId, channelId = null) {
-  const data = loadData();
+/**
+ * updateWebhookActivity(webhookId, channelId)
+ * - persist mapping webhookId -> channelId
+ * - maintain totalActiveMsToday as before
+ * - maintain streak: reset if > RESET_INACTIVE, +1 if >= SIX_HOURS
+ * returns { added, streak, wasReset }
+ */
+module.exports.updateWebhookActivity = async function (webhookId, channelId = null) {
+  const data = await loadData();
 
   if (!data[webhookId]) {
     data[webhookId] = {
@@ -55,10 +58,8 @@ module.exports.updateWebhookActivity = function (webhookId, channelId = null) {
       lastMessageAt: 0,
       warnCount: 0,
       lastReset: todayString(),
-      // thêm cho streak
       streak: 0,
       lastActiveForStreak: 0,
-      // lưu mapping webhook -> channelId (persist)
       channelId: null
     };
   }
@@ -70,52 +71,43 @@ module.exports.updateWebhookActivity = function (webhookId, channelId = null) {
   let added = false;
   let wasReset = false;
 
-  // nếu có mapping channelId truyền vào, ghi vào record
   if (channelId) record.channelId = channelId;
 
-  // nếu đã lâu không active theo streak rule -> reset streak
+  // reset streak if inactive too long
   if (record.lastActiveForStreak > 0 && (now - record.lastActiveForStreak) >= RESET_INACTIVE) {
     record.streak = 0;
     wasReset = true;
   }
 
-  // tăng streak nếu đủ 6 giờ kể từ lastActiveForStreak (và không vừa reset)
+  // add streak if passed SIX_HOURS since lastActiveForStreak (and not the very first)
   if (record.lastActiveForStreak > 0 && (now - record.lastActiveForStreak) >= SIX_HOURS) {
     record.streak = (record.streak || 0) + 1;
     added = true;
   }
 
-  // cập nhật lastActiveForStreak luôn lên now
+  // update lastActiveForStreak to now (always refresh on webhook tick)
   record.lastActiveForStreak = now;
 
-  // giữ logic cũ: tích tổng active ms trong ngày (nếu thời gian giữa 2 message < 5 phút)
+  // keep totalActiveMsToday similar to old logic
   if (record.lastMessageAt > 0) {
     const diff = now - record.lastMessageAt;
     if (diff < SHORT_DIFF_MS) {
-      record.totalActiveMsToday += diff;
+      record.totalActiveMsToday = (record.totalActiveMsToday || 0) + diff;
     }
   }
   record.lastMessageAt = now;
 
-  saveData(data);
+  await saveData(data);
   return { added, streak: record.streak || 0, wasReset };
 };
 
-// ----- checkWebhookWarnings(client, warnChannelId, sleepCategoryId)
-// Giữ nguyên ý tưởng cũ nhưng tìm kênh bằng mapping persist record.channelId
-module.exports.checkWebhookWarnings = async function (
-  client,
-  warnChannelId,
-  sleepCategoryId
-) {
-  const data = loadData();
+module.exports.checkWebhookWarnings = async function (client, warnChannelId, sleepCategoryId) {
+  const data = await loadData();
   const warnChannel = client.channels.cache.get(warnChannelId);
 
   for (const [webhookId, record] of Object.entries(data)) {
     resetIfNeeded(record);
     const hours = (record.totalActiveMsToday || 0) / 1000 / 60 / 60;
-
-    // nếu đủ 6h thì bỏ qua
     if (hours >= 6) continue;
 
     record.warnCount = (record.warnCount || 0) + 1;
@@ -124,51 +116,43 @@ module.exports.checkWebhookWarnings = async function (
       `⚠️ Webhook **${webhookId}** chỉ chạy **${hours.toFixed(2)}h/6h** hôm nay \n→ Cảnh cáo **${record.warnCount}/2**`
     ).catch(() => {});
 
-    // nếu vượt limit 2 lần -> tìm channel bằng channelId mapping rồi chuyển sang sleep
     if (record.warnCount >= 2) {
-      record.warnCount = 0; // reset warnCount
-
-      const channelId = record.channelId;
+      record.warnCount = 0;
+      // try channelId mapping first
       let channel = null;
-      if (channelId) channel = client.channels.cache.get(channelId);
-
-      // fallback: tìm kênh theo lastWebhookId (nếu có field set trên channel runtime)
+      if (record.channelId) channel = client.channels.cache.get(record.channelId);
+      // fallback: search runtime lastWebhookId on channels (if set)
       if (!channel) {
-        channel = client.channels.cache.find(
-          (c) => c.isTextBased && c.lastWebhookId === webhookId
-        );
+        channel = client.channels.cache.find(c => c.isTextBased && c.lastWebhookId === webhookId);
       }
-
       if (channel) {
         await channel.setParent(sleepCategoryId).catch(() => {});
-        await warnChannel?.send(
-          `😴 Kênh **${channel.name}** bị chuyển về danh mục NGỦ do webhook không đủ giờ hoạt động!`
-        ).catch(() => {});
+        await warnChannel?.send(`😴 Kênh **${channel.name}** bị chuyển về danh mục NGỦ do webhook không đủ giờ hoạt động!`).catch(() => {});
       } else {
-        await warnChannel?.send(
-          `⚠️ Không tìm thấy kênh tương ứng với webhook ${webhookId} để chuyển danh mục.`
-        ).catch(() => {});
+        await warnChannel?.send(`⚠️ Không tìm thấy kênh tương ứng với webhook ${webhookId} để chuyển danh mục.`).catch(() => {});
       }
     }
   }
 
-  saveData(data);
+  await saveData(data);
 };
 
-// ----- resetStreak(webhookId)
-// reset streak của webhook (persist)
-module.exports.resetStreak = function (webhookId) {
-  const data = loadData();
+module.exports.resetStreak = async function (webhookId) {
+  const data = await loadData();
   if (!data[webhookId]) return false;
   data[webhookId].streak = 0;
   data[webhookId].lastActiveForStreak = 0;
-  saveData(data);
+  await saveData(data);
   return true;
 };
 
-// ----- getRecord(webhookId)
-// helper read-only
-module.exports.getRecord = function (webhookId) {
-  const data = loadData();
+module.exports.getRecord = async function (webhookId) {
+  const data = await loadData();
   return data[webhookId] || null;
+};
+
+module.exports.findWebhookIdByChannelId = async function (channelId) {
+  const data = await loadData();
+  const entry = Object.entries(data).find(([k, v]) => v && v.channelId === channelId);
+  return entry ? entry[0] : null;
 };
