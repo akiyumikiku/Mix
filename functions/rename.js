@@ -1,5 +1,5 @@
 // functions/rename.js
-async function renameChannelByCategory(channel) {
+async function renameChannelByCategory(channel, streak = 0) {
   try {
     const CATEGORY_1 = "1411034825699233943"; // Danh mục hoạt động
     const CATEGORY_2 = "1427958263281881088"; // Danh mục ngủ
@@ -11,8 +11,11 @@ async function renameChannelByCategory(channel) {
 
     let newName;
     if (channel.parentId === CATEGORY_1) {
-      newName = `🛠★】${username}-macro`;
+      // Luôn hiển thị streak, kể cả khi = 0
+      const streakBadge = `〔${streak}🔥〕`;
+      newName = `🛠★】${streakBadge}${username}-macro`;
     } else if (channel.parentId === CATEGORY_2) {
+      // Không hiển thị streak trong danh mục ngủ
       newName = `⏰★】${username}-macro`;
     } else return;
 
