@@ -17,7 +17,7 @@ const ROLE = '1411991634194989096';
 const REPORT = '1438039815919632394';
 const FILE = path.join(__dirname, '../data/streaks.json');
 const STREAK_CATS = [CAT.ACTIVE, CAT.CYBER, CAT.DREAM, CAT.GLITCH];
-const BIOME_CATS = [CAT.CYBER, CAT.DREAM, CAT.GLITCH]; // 3 danh mục biome đặc biệt
+const BIOME_CATS = [CAT.CYBER, CAT.DREAM, CAT.GLITCH];
 const ALL_CATS = Object.values(CAT);
 
 module.exports = (client) => {
@@ -66,20 +66,13 @@ module.exports = (client) => {
 
   function parseBadges(name) {
     const badges = [];
-    
-    // Tách phần prefix trước ★】
     const prefixMatch = name.match(/^(.+?)★】/);
     if (!prefixMatch) return badges;
-    
     const prefix = prefixMatch[1];
-    
-    // Parse x2🌸, x3🌐, x4🧩
     const counted = prefix.match(/x(\d+)(🌸|🌐|🧩)/g);
     if (counted) {
       counted.forEach(badge => badges.push(badge));
     }
-    
-    // Parse 🌸, 🌐, 🧩 đơn lẻ (không có số)
     const single = prefix.match(/(?<!x\d)(🌸|🌐|🧩)/g);
     if (single) {
       single.forEach(s => {
@@ -88,7 +81,6 @@ module.exports = (client) => {
         }
       });
     }
-    
     return badges;
   }
 
@@ -134,163 +126,18 @@ module.exports = (client) => {
 
   function detectBiome(embed) {
     if (!embed) return null;
-    
-    // Check title
-    if (embed.title) {
-      const t = embed.title.toUpperCase();
-      if (t.includes('const { renameChannelByCategory } = require('../functions/rename');
-const { EmbedBuilder } = require('discord.js');
-const fs = require('fs').promises;
-const fsSync = require('fs');
-const path = require('path');
-
-const CAT = {
-  SLEEP: '1427958263281881088',
-  ACTIVE: '1411034825699233943',
-  CYBER: '1446077580615880735',
-  DREAM: '1445997821336748155',
-  GLITCH: '1445997659948060712',
-  EMPTY: '1463173837389828097'
-};
-
-const ROLE = '1411991634194989096';
-const REPORT = '1438039815919632394';
-const FILE = path.join(__dirname, '../data/streaks.json');
-const STREAK_CATS = [CAT.ACTIVE, CAT.CYBER, CAT.DREAM, CAT.GLITCH];
-const BIOME_CATS = [CAT.CYBER, CAT.DREAM, CAT.GLITCH]; // 3 danh mục biome đặc biệt
-const ALL_CATS = Object.values(CAT);
-
-module.exports = (client) => {
-  const data = new Map();
-  let saveTimer = null;
-  let saving = false;
-  const processing = new Set();
-
-  function load() {
-    try {
-      if (fsSync.existsSync(FILE)) {
-        const json = JSON.parse(fsSync.readFileSync(FILE, 'utf8'));
-        Object.entries(json).forEach(([id, info]) => data.set(id, info));
-        console.log('Loaded ' + data.size + ' channels');
-      }
-    } catch (e) {
-      console.error('Load error:', e.message);
-    }
-  }
-
-  async function save() {
-    if (saving) return;
-    try {
-      saving = true;
-      const dir = path.dirname(FILE);
-      if (!fsSync.existsSync(dir)) await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(FILE, JSON.stringify(Object.fromEntries(data), null, 2), 'utf8');
-    } catch (e) {
-      console.error('Save error:', e.message);
-    } finally {
-      saving = false;
-    }
-  }
-
-  function scheduleSave() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(save, 2000);
-  }
-
-  load();
-
-  function parseStreak(name) {
-    const m = name.match(/〔(\d+)🔥〕/);
-    return m ? parseInt(m[1], 10) : 0;
-  }
-
-  function parseBadges(name) {
-    const badges = [];
-    
-    // Tách phần prefix trước ★】
-    const prefixMatch = name.match(/^(.+?)★】/);
-    if (!prefixMatch) return badges;
-    
-    const prefix = prefixMatch[1];
-    
-    // Parse x2🌸, x3🌐, x4🧩
-    const counted = prefix.match(/x(\d+)(🌸|🌐|🧩)/g);
-    if (counted) {
-      counted.forEach(badge => badges.push(badge));
-    }
-    
-    // Parse 🌸, 🌐, 🧩 đơn lẻ (không có số)
-    const single = prefix.match(/(?<!x\d)(🌸|🌐|🧩)/g);
-    if (single) {
-      single.forEach(s => {
-        if (!badges.some(b => b.includes(s))) {
-          badges.push(s);
-        }
-      });
-    }
-    
-    return badges;
-  }
-
-  function getUserId(topic) {
-    if (!topic) return null;
-    const parts = topic.trim().split(/\s+/);
-    return parts.length >= 2 && /^\d{17,20}$/.test(parts[1]) ? parts[1] : null;
-  }
-
-  function getData(id, ch = null) {
-    if (!data.has(id)) {
-      data.set(id, {
-        streak: ch ? parseStreak(ch.name) : 0,
-        first: null,
-        last: null,
-        days: 0,
-        date: null,
-        badges: ch ? parseBadges(ch.name) : [],
-        moving: false,
-        webhookTimes: [],
-        firstBiome: null
-      });
-    }
-    return data.get(id);
-  }
-
-  function getDate() {
-    return new Date().toISOString().split('T')[0];
-  }
-
-  function getNext13H() {
-    const now = new Date();
-    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 0, 0));
-    if (now >= next) next.setUTCDate(next.getUTCDate() + 1);
-    return next;
-  }
-
-  function formatTime(ms) {
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    return h + 'h ' + m + 'm';
-  }
-
-  function detectBiome(embed) {
-    if (!embed) return null;
-    
-    // Check title
     if (embed.title) {
       const t = embed.title.toUpperCase();
       if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
       if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
       if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
     }
-    
-    // Check description
     if (embed.description) {
       const d = embed.description.toUpperCase();
       if (d.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
       if (d.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
       if (d.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
     }
-    
     return null;
   }
 
@@ -309,21 +156,17 @@ module.exports = (client) => {
   function calculateActiveTime(webhookTimes) {
     if (!webhookTimes || webhookTimes.length === 0) return 0;
     if (webhookTimes.length === 1) return 0;
-    
     const sorted = [...webhookTimes].sort((a, b) => a - b);
     const MAX_GAP = 10 * 60 * 1000;
     let totalTime = 0;
-    
     for (let i = 1; i < sorted.length; i++) {
       const gap = sorted[i] - sorted[i - 1];
       if (gap <= MAX_GAP) {
         totalTime += gap;
       }
     }
-    
     const hours = (totalTime / 3600000).toFixed(2);
     console.log('Webhooks: ' + sorted.length + ', Active time: ' + formatTime(totalTime) + ' (' + hours + 'h)');
-    
     return totalTime;
   }
 
@@ -353,20 +196,16 @@ module.exports = (client) => {
       const targetCat = map[type];
       if (!targetCat) return;
 
-      // Tìm badge cùng loại
       const existingIndex = d.badges.findIndex(b => b.includes(badge));
       
       if (existingIndex !== -1) {
-        // Badge đã tồn tại → tăng counter
         const existing = d.badges[existingIndex];
         const m = existing.match(/x(\d+)/);
         const count = m ? parseInt(m[1], 10) : 1;
         d.badges[existingIndex] = 'x' + (count + 1) + badge;
         console.log('Badge++: ' + existing + ' → x' + (count + 1) + badge);
       } else {
-        // Badge chưa tồn tại
         if (!d.firstBiome) {
-          // Lần đầu tiên có biome → di chuyển category + set badge
           d.firstBiome = type;
           d.badges = [badge];
           d.moving = true;
@@ -374,13 +213,11 @@ module.exports = (client) => {
           await new Promise(r => setTimeout(r, 500));
           console.log('🌟 First biome: ' + type + ', moved to ' + getCatName(targetCat));
         } else {
-          // Đã có biome khác rồi → CHỈ thêm badge, KHÔNG di chuyển
           d.badges.push(badge);
           console.log('➕ Added new badge: ' + badge + ' (staying in ' + getCatName(ch.parentId) + ')');
         }
       }
       
-      // Rename sau khi xử lý badge
       await renameChannelByCategory(ch, d.streak, d.badges);
       await updateRole(ch, true);
       scheduleSave();
@@ -402,7 +239,6 @@ module.exports = (client) => {
 
       for (const [, ch] of channels) {
         const d = getData(ch.id, ch);
-        
         const active = calculateActiveTime(d.webhookTimes);
         const hours = active / 3600000;
 
@@ -489,7 +325,6 @@ module.exports = (client) => {
         
         for (const embed of msg.embeds) {
           if (!embed.title) continue;
-          
           const title = embed.title.toUpperCase();
           if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
             const biome = detectBiome(embed);
@@ -578,7 +413,7 @@ module.exports = (client) => {
     try {
       if (!msg.webhookId) return;
       const ch = msg.channel;
-      if (!ch?.parentId || !ALL_CATS.includes(ch.parentId)) return;
+      if (!ch || !ch.parentId || !ALL_CATS.includes(ch.parentId)) return;
       const userId = getUserId(ch.topic);
       if (!userId || msg.author.id !== userId) return;
 
@@ -586,32 +421,24 @@ module.exports = (client) => {
       const d = getData(ch.id, ch);
       const currentParent = ch.parentId;
 
-      console.log('📨 Webhook from ' + msg.author.tag + ' in ' + ch.name);
-      console.log('   Category: ' + getCatName(currentParent));
-      console.log('   Content: ' + (msg.content ? msg.content.substring(0, 50) : 'empty'));
-      console.log('   Embeds: ' + (msg.embeds?.length || 0));
+      console.log('📨 Webhook in ' + ch.name + ' (cat: ' + getCatName(currentParent) + ')');
 
-      // === XỬ LÝ BIOME ĐẶC BIỆT ===
       let hasSpecialBiome = false;
       
-      // 1. Check trong EMBEDS
-      if (msg.embeds?.length > 0) {
+      if (msg.embeds && msg.embeds.length > 0) {
         for (const embed of msg.embeds) {
-          console.log('   📋 Embed title: ' + (embed.title || 'no title'));
           const biome = detectBiome(embed);
           if (biome) {
-            console.log('   🎯 Detected biome from EMBED: ' + biome.type);
+            console.log('🎯 Biome from EMBED: ' + biome.type);
             await handleBiome(ch, biome.type, biome.badge);
             hasSpecialBiome = true;
           }
         }
       }
       
-      // 2. Check trong TEXT CONTENT (nếu chưa tìm thấy biome)
       if (!hasSpecialBiome && msg.content) {
         const contentUpper = msg.content.toUpperCase();
         let biome = null;
-        
         if (contentUpper.includes('DREAMSPACE')) {
           biome = { type: 'DREAMSPACE', badge: '🌸' };
         } else if (contentUpper.includes('CYBERSPACE')) {
@@ -619,16 +446,13 @@ module.exports = (client) => {
         } else if (contentUpper.includes('GLITCH')) {
           biome = { type: 'GLITCHED', badge: '🧩' };
         }
-        
         if (biome) {
-          console.log('   🎯 Detected biome from TEXT: ' + biome.type);
+          console.log('🎯 Biome from TEXT: ' + biome.type);
           await handleBiome(ch, biome.type, biome.badge);
           hasSpecialBiome = true;
         }
       }
 
-      // === LOGIC REACTIVATE/MOVE ===
-      // 1. Nếu đang ở SLEEP hoặc EMPTY → đẩy lên ACTIVE (trừ khi vừa move sang biome)
       if (currentParent === CAT.SLEEP || currentParent === CAT.EMPTY) {
         const oldStreak = parseStreak(ch.name);
         d.streak = oldStreak > 0 ? oldStreak : 0;
@@ -637,15 +461,13 @@ module.exports = (client) => {
         d.last = now;
         d.days = 0;
 
-        // Nếu KHÔNG có biome đặc biệt → move về ACTIVE
-        // Nếu CÓ biome đặc biệt → đã move ở handleBiome rồi, không cần move nữa
         if (!hasSpecialBiome) {
           d.moving = true;
           await ch.setParent(CAT.ACTIVE, { lockPermissions: false });
           await new Promise(r => setTimeout(r, 500));
-          console.log('✨ Reactivated to ACTIVE: ' + ch.name);
+          console.log('✨ To ACTIVE: ' + ch.name);
         } else {
-          console.log('✨ Reactivated to BIOME: ' + ch.name);
+          console.log('✨ To BIOME: ' + ch.name);
         }
 
         await updateRole(ch, true);
@@ -654,10 +476,7 @@ module.exports = (client) => {
         return;
       }
 
-      // 2. Nếu đang ở 3 danh mục biome (CYBER/DREAM/GLITCH) → GIỮ NGUYÊN
       if (BIOME_CATS.includes(currentParent)) {
-        console.log('📍 Staying in ' + getCatName(currentParent) + ': ' + ch.name);
-        // Chỉ cập nhật webhook times, không move
         if (!d.webhookTimes) d.webhookTimes = [];
         d.webhookTimes.push(now);
         if (!d.first) d.first = now;
@@ -666,9 +485,7 @@ module.exports = (client) => {
         return;
       }
 
-      // 3. Nếu đang ở ACTIVE → GIỮ NGUYÊN (chờ embed đặc biệt)
       if (currentParent === CAT.ACTIVE) {
-        console.log('📍 Staying in ACTIVE: ' + ch.name);
         if (!d.webhookTimes) d.webhookTimes = [];
         d.webhookTimes.push(now);
         if (!d.first) d.first = now;
@@ -677,8 +494,6 @@ module.exports = (client) => {
         return;
       }
 
-      // === FALLBACK: Trường hợp khác (không nên xảy ra) ===
-      console.log('⚠️ Unexpected category: ' + getCatName(currentParent));
       if (!d.webhookTimes) d.webhookTimes = [];
       d.webhookTimes.push(now);
       if (!d.first) d.first = now;
