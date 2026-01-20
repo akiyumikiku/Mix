@@ -15,13 +15,14 @@ const REPORT_CHANNEL_ID = ‘1438039815919632394’;
 const STREAK_FILE = path.join(__dirname, ‘../data/streaks.json’);
 
 const STREAK_CATEGORIES = [CATEGORY_ACTIVE, CATEGORY_CYBER, CATEGORY_DREAM, CATEGORY_GLITCH];
+const ALL_TRACKED_CATEGORIES = […STREAK_CATEGORIES, CATEGORY_SLEEP];
 
 module.exports = (client) => {
 const channelData = new Map();
 let saveTimer = null;
 let isSaving = false;
 
-// Load data synchronously on startup
+// === DATA PERSISTENCE ===
 function loadData() {
 try {
 if (fsSync.existsSync(STREAK_FILE)) {
@@ -32,11 +33,10 @@ channelData.set(channelId, channelInfo);
 console.log(‘📂 Loaded ’ + channelData.size + ’ channel records’);
 }
 } catch (err) {
-console.error(‘❌ Error loading data:’, err);
+console.error(‘❌ Error loading data:’, err.message);
 }
 }
 
-// Save data with debouncing and collision prevention
 async function saveData() {
 if (isSaving) return;
 
@@ -52,7 +52,7 @@ try {
   const data = Object.fromEntries(channelData);
   await fs.writeFile(STREAK_FILE, JSON.stringify(data, null, 2), 'utf8');
 } catch (err) {
-  console.error('❌ Error saving data:', err);
+  console.error('❌ Error saving data:', err.message);
 } finally {
   isSaving = false;
 }
@@ -67,6 +67,7 @@ saveTimer = setTimeout(() => saveData(), 2000);
 
 loadData();
 
+// === PARSING HELPERS ===
 function parseStreakFromName(channelName) {
 const match = channelName.match(/〔(\d+)🔥〕/);
 return match ? parseInt(match[1], 10) : 0;
@@ -74,15 +75,13 @@ return match ? parseInt(match[1], 10) : 0;
 
 function parseSpecialBadgesFromName(channelName) {
 const badges = [];
-
-```
-// Order matters: check for x-multiplier first, then single emoji
 const patterns = [
-  { regex: /x(\d+)🌸/, single: '🌸' },
-  { regex: /x(\d+)🌐/, single: '🌐' },
-  { regex: /x(\d+)🧩/, single: '🧩' }
+{ regex: /x(\d+)🌸/, single: ‘🌸’ },
+{ regex: /x(\d+)🌐/, single: ‘🌐’ },
+{ regex: /x(\d+)🧩/, single: ‘🧩’ }
 ];
 
+```
 patterns.forEach(({ regex, single }) => {
   const match = channelName.match(regex);
   if (match) {
@@ -95,6 +94,14 @@ patterns.forEach(({ regex, single }) => {
 return badges;
 ```
 
+}
+
+function extractUserId(topic) {
+if (!topic) return null;
+const parts = topic.trim().split(/\s+/);
+if (parts.length < 2) return null;
+const userId = parts[1];
+return /^\d{17,20}$/.test(userId) ? userId : null;
 }
 
 function getData(channelId, channel = null) {
@@ -123,6 +130,7 @@ return channelData.get(channelId);
 
 }
 
+// === TIME HELPERS ===
 function getCurrentDate() {
 return new Date().toISOString().split(‘T’)[0];
 }
@@ -133,7 +141,7 @@ const next13H = new Date(Date.UTC(
 now.getUTCFullYear(),
 now.getUTCMonth(),
 now.getUTCDate(),
-6, 0, 0, 0 // 13:00 Vietnam = 06:00 UTC
+6, 0, 0, 0
 ));
 
 ```
@@ -152,12 +160,12 @@ const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
 return hours + ’h ’ + minutes + ‘m’;
 }
 
+// === BIOME DETECTION ===
 function detectSpecialBiome(embed) {
 if (!embed?.title) return null;
-
-```
 const title = embed.title.toUpperCase();
 
+```
 if (title.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
 if (title.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
 if (title.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
@@ -167,20 +175,18 @@ return null;
 
 }
 
-// Extract user ID from topic with validation
-function extractUserId(topic) {
-if (!topic) return null;
-
-```
-const parts = topic.trim().split(/\s+/);
-if (parts.length < 2) return null;
-
-const userId = parts[1];
-return /^\d{17,20}$/.test(userId) ? userId : null;
-```
-
+function getCategoryDisplayName(categoryId) {
+const names = {
+[CATEGORY_ACTIVE]: ‘Active’,
+[CATEGORY_CYBER]: ‘Cyberspace’,
+[CATEGORY_DREAM]: ‘Dreamspace’,
+[CATEGORY_GLITCH]: ‘Glitch’,
+[CATEGORY_SLEEP]: ‘Dormant’
+};
+return names[categoryId] || ‘Unknown’;
 }
 
+// === ROLE MANAGEMENT ===
 async function updateRoleByCategory(channel, addRole) {
 try {
 const userId = extractUserId(channel.topic);
@@ -212,10 +218,10 @@ return;
 
 }
 
+// === SPECIAL CATEGORY LOGIC ===
 async function moveToSpecialCategory(channel, biomeType, badge) {
 try {
 const data = getData(channel.id, channel);
-let targetCategory;
 
 ```
   const categoryMap = {
@@ -224,13 +230,12 @@ let targetCategory;
     'GLITCHED': CATEGORY_GLITCH
   };
 
-  targetCategory = categoryMap[biomeType];
+  const targetCategory = categoryMap[biomeType];
   if (!targetCategory) return;
 
   const existingBadge = data.specialBadges.find(b => b.includes(badge));
   
   if (existingBadge) {
-    // Increment existing badge count
     const match = existingBadge.match(/x(\d+)/);
     const currentCount = match ? parseInt(match[1], 10) : 1;
     const newCount = currentCount + 1;
@@ -238,12 +243,11 @@ let targetCategory;
     data.specialBadges = data.specialBadges.filter(b => !b.includes(badge));
     data.specialBadges.unshift('x' + newCount + badge);
     
-    console.log('🔢 Increased ' + badge + ' count to ' + newCount + ': ' + channel.name);
+    console.log('🔢 Increased ' + badge + ' to x' + newCount + ': ' + channel.name);
   } else {
-    // Add new badge
     if (data.specialBadges.length > 0 && channel.parentId !== targetCategory) {
       data.specialBadges.push(badge);
-      console.log('🎨 Added new badge ' + badge + ' (keeping category): ' + channel.name);
+      console.log('🎨 Added badge ' + badge + ' (keeping category): ' + channel.name);
     } else if (channel.parentId !== targetCategory) {
       data.specialBadges = [badge];
       
@@ -262,14 +266,15 @@ let targetCategory;
   await renameChannelByCategory(channel, data.streak, data.specialBadges);
   scheduleSave();
 
-  console.log('✅ Special category updated: ' + channel.name + ' | Badges: ' + data.specialBadges.join(''));
+  console.log('✅ Special category: ' + channel.name + ' | Badges: ' + data.specialBadges.join(''));
 } catch (err) {
-  console.error('❌ moveToSpecialCategory error:', err);
+  console.error('❌ moveToSpecialCategory error:', err.message);
 }
 ```
 
 }
 
+// === NOTIFICATIONS ===
 async function sendNotify(channel, type, extraData = {}) {
 try {
 const userId = extractUserId(channel.topic);
@@ -278,13 +283,9 @@ if (!userId) return;
 ```
   const messages = {
     sleep: '<@' + userId + '>\n💤 Your macro channel has been moved to the **DORMANT** category due to 3 consecutive days of inactivity.',
-    
     active: '<@' + userId + '>\n✨ Your macro channel has been **reactivated** and moved to an active category. Welcome back!',
-    
-    streak_warning: '<@' + userId + '> ⚠️ **Activity Warning!**\nYou only had **' + extraData.activeTime + '** of activity today (need 6h+ to maintain streak).\nCurrent streak: **' + extraData.streak + '** 🔥\n\n📉 **Day ' + extraData.daysCount + '/3** without 6h+ activity - Get 6+ hours tomorrow or your channel will be moved to dormant!',
-    
+    streak_warning: '<@' + userId + '> ⚠️ **Activity Warning!**\nYou only had **' + extraData.activeTime + '** of activity today (need 6h+ to maintain streak).\nCurrent streak: **' + extraData.streak + '** 🔥\n\n📉 **Day ' + extraData.daysCount + '/3** without 6h+ activity',
     streak_lost_final: '<@' + userId + '> 💔 **Streak Lost!**\nYou only had **' + extraData.activeTime + '** of activity today (need 6h+).\nYour streak has been reset: **' + extraData.oldStreak + ' → 0** 🔥',
-    
     streak_saved: '<@' + userId + '> ✅ **Streak Saved!**\nYou reached 6+ hours of activity today!\nCurrent streak: **' + extraData.streak + '** 🔥'
   };
 
@@ -299,17 +300,7 @@ if (!userId) return;
 
 }
 
-function getCategoryDisplayName(categoryId) {
-const names = {
-[CATEGORY_ACTIVE]: ‘Active’,
-[CATEGORY_CYBER]: ‘Cyberspace’,
-[CATEGORY_DREAM]: ‘Dreamspace’,
-[CATEGORY_GLITCH]: ‘Glitch’,
-[CATEGORY_SLEEP]: ‘Dormant’
-};
-return names[categoryId] || ‘Unknown’;
-}
-
+// === DAILY CHECK ===
 async function dailyCheck() {
 try {
 console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
@@ -352,8 +343,7 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
       data.streak++;
       data.daysWithoutActivity = 0;
       await renameChannelByCategory(channel, data.streak, data.specialBadges);
-      console.log('🔥 Streak increased: ' + channel.name + ' = ' + data.streak);
-
+      console.log('🔥 Streak++: ' + channel.name + ' = ' + data.streak);
       await sendNotify(channel, 'streak_saved', { streak: data.streak });
     } else {
       const oldStreak = data.streak;
@@ -362,8 +352,8 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
       if (data.daysWithoutActivity >= 3) {
         data.streak = 0;
         data.specialBadges = [];
-
         data.isAutoMoving = true;
+        
         await channel.setParent(CATEGORY_SLEEP, { lockPermissions: false });
         await new Promise(r => setTimeout(r, 500));
         
@@ -377,14 +367,14 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
         });
         await sendNotify(channel, 'sleep');
         
-        console.log('📦 Moved ' + channel.name + ' → DORMANT (3 days inactive, streak ' + oldStreak + ' → 0)');
+        console.log('📦 → DORMANT: ' + channel.name + ' (streak ' + oldStreak + ' → 0)');
       } else {
         await sendNotify(channel, 'streak_warning', {
           activeTime: formatActiveTime(activeTime),
           streak: data.streak,
           daysCount: data.daysWithoutActivity
         });
-        console.log('⚠️ Warning sent: ' + channel.name + ' - Day ' + data.daysWithoutActivity + '/3');
+        console.log('⚠️ Warning: ' + channel.name + ' - Day ' + data.daysWithoutActivity + '/3');
       }
     }
 
@@ -395,7 +385,7 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
 
   scheduleSave();
 
-  // Build report embeds
+  // Build report
   const embeds = [];
   const dateStr = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 
@@ -408,10 +398,7 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
   embedConfigs.forEach(config => {
     if (results[config.key].length > 0) {
       const description = results[config.key]
-        .map(r => {
-          const categoryName = getCategoryDisplayName(r.channel.parentId);
-          return '**' + r.channel.name + '** - ' + categoryName + ' - ' + formatActiveTime(r.activeTime);
-        })
+        .map(r => '**' + r.channel.name + '** - ' + getCategoryDisplayName(r.channel.parentId) + ' - ' + formatActiveTime(r.activeTime))
         .join('\n');
 
       embeds.push(new EmbedBuilder()
@@ -435,7 +422,7 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
     });
   }
 } catch (err) {
-  console.error('❌ Daily check error:', err);
+  console.error('❌ Daily check error:', err.message);
 } finally {
   scheduleDailyCheck();
 }
@@ -446,29 +433,69 @@ console.log(‘🕐 Running daily check at 13:00 Vietnam time…’);
 function scheduleDailyCheck() {
 const next13H = getNext13HVietnam();
 const timeUntil = next13H - new Date();
-
-```
-console.log('⏰ Next daily check scheduled at: ' + next13H.toISOString());
-
-setTimeout(() => {
-  dailyCheck();
-}, timeUntil);
-```
-
+console.log(’⏰ Next daily check: ’ + next13H.toISOString());
+setTimeout(() => dailyCheck(), timeUntil);
 }
 
-// Wait for channel topic to be set (with retry logic)
-async function waitForTopic(channel, maxRetries = 5, delayMs = 500) {
-for (let i = 0; i < maxRetries; i++) {
-await new Promise(r => setTimeout(r, delayMs));
-await channel.fetch();
+// === STARTUP SCAN ===
+async function scanAllChannelsOnStartup(guild) {
+try {
+console.log(‘🔍 Scanning all tracked channels on startup…’);
 
 ```
-  if (channel.topic) {
-    return true;
+  const channels = guild.channels.cache.filter(
+    ch => ch.type === 0 && ALL_TRACKED_CATEGORIES.includes(ch.parentId)
+  );
+
+  const today = getCurrentDate();
+  let syncedCount = 0;
+
+  for (const [, channel] of channels) {
+    try {
+      const streakFromName = parseStreakFromName(channel.name);
+      const badgesFromName = parseSpecialBadgesFromName(channel.name);
+      const data = getData(channel.id, channel);
+
+      // Sync streak
+      if (streakFromName !== data.streak && streakFromName >= 0) {
+        data.streak = streakFromName;
+        console.log('🔄 Synced streak: ' + channel.name + ' = ' + streakFromName);
+      }
+
+      // Sync badges
+      if (badgesFromName.length > 0) {
+        data.specialBadges = badgesFromName;
+        console.log('🎨 Synced badges: ' + channel.name + ' = ' + badgesFromName.join(''));
+      }
+
+      // Reset daily data
+      if (data.lastCheckDate !== today) {
+        data.firstWebhook = null;
+        data.lastWebhook = null;
+      }
+
+      // Sync role based on category
+      if (STREAK_CATEGORIES.includes(channel.parentId)) {
+        await updateRoleByCategory(channel, true);
+      } else if (channel.parentId === CATEGORY_SLEEP) {
+        await updateRoleByCategory(channel, false);
+      }
+
+      // Rename to match current category
+      await renameChannelByCategory(channel, data.streak, data.specialBadges);
+      syncedCount++;
+
+    } catch (err) {
+      console.error('❌ Error syncing channel ' + channel.name + ':', err.message);
+    }
   }
+
+  scheduleSave();
+  console.log('✅ Scanned and synced ' + syncedCount + ' channels');
+
+} catch (err) {
+  console.error('❌ Startup scan error:', err.message);
 }
-return false;
 ```
 
 }
@@ -478,45 +505,19 @@ return false;
 client.once(‘ready’, async () => {
 try {
 const guild = client.guilds.cache.first();
-if (!guild) return;
+if (!guild) {
+console.error(‘❌ No guild found’);
+return;
+}
 
 ```
-  const channels = guild.channels.cache.filter(
-    ch => ch.type === 0 && (
-      STREAK_CATEGORIES.includes(ch.parentId) || 
-      ch.parentId === CATEGORY_SLEEP
-    )
-  );
-
-  const today = getCurrentDate();
+  console.log('🚀 Bot ready! Starting channel scan...');
   
-  for (const [, channel] of channels) {
-    const streakFromName = parseStreakFromName(channel.name);
-    const badgesFromName = parseSpecialBadgesFromName(channel.name);
-    const data = getData(channel.id, channel);
-
-    if (streakFromName !== data.streak && streakFromName > 0) {
-      data.streak = streakFromName;
-      console.log('🔄 Synced streak for ' + channel.name + ': ' + streakFromName);
-    }
-
-    if (badgesFromName.length > 0) {
-      data.specialBadges = badgesFromName;
-      console.log('🎨 Synced badges for ' + channel.name + ': ' + badgesFromName.join(''));
-    }
-
-    if (data.lastCheckDate !== today) {
-      data.firstWebhook = null;
-      data.lastWebhook = null;
-    }
-  }
-
-  scheduleSave();
-  console.log('✅ Synced ' + channels.size + ' channels on startup');
-
+  await scanAllChannelsOnStartup(guild);
   scheduleDailyCheck();
+
 } catch (err) {
-  console.error('❌ Error on ready:', err);
+  console.error('❌ Error on ready:', err.message);
 }
 ```
 
@@ -529,6 +530,7 @@ if (!msg.webhookId) return;
 ```
   const channel = msg.channel;
   if (!channel?.parentId) return;
+  if (!ALL_TRACKED_CATEGORIES.includes(channel.parentId)) return;
 
   const userId = extractUserId(channel.topic);
   if (!userId || msg.author.id !== userId) return;
@@ -536,7 +538,7 @@ if (!msg.webhookId) return;
   const now = Date.now();
   const data = getData(channel.id, channel);
 
-  // Check for special biomes in embeds
+  // Check for special biomes
   if (msg.embeds?.length > 0) {
     for (const embed of msg.embeds) {
       const biome = detectSpecialBiome(embed);
@@ -554,8 +556,8 @@ if (!msg.webhookId) return;
     data.firstWebhook = now;
     data.lastWebhook = now;
     data.daysWithoutActivity = 0;
-
     data.isAutoMoving = true;
+
     await channel.setParent(CATEGORY_ACTIVE, { lockPermissions: false });
     await new Promise(r => setTimeout(r, 500));
 
@@ -576,8 +578,9 @@ if (!msg.webhookId) return;
 
   data.lastWebhook = now;
   scheduleSave();
+
 } catch (err) {
-  console.error('❌ messageCreate error:', err);
+  console.error('❌ messageCreate error:', err.message);
 }
 ```
 
@@ -586,39 +589,42 @@ if (!msg.webhookId) return;
 client.on(‘channelCreate’, async (channel) => {
 try {
 if (channel.type !== 0) return;
+if (!ALL_TRACKED_CATEGORIES.includes(channel.parentId)) return;
 
 ```
-  console.log('🆕 Channel created: ' + channel.name + ' | ID: ' + channel.id + ' | Parent: ' + channel.parentId);
+  console.log('🆕 Channel created: ' + channel.name + ' in ' + getCategoryDisplayName(channel.parentId));
 
-  // Wait for topic to be set with retry logic
-  const hasTopicconst hasTopic = await waitForTopic(channel);
-  
-  if (!hasTopic) {
-    console.log('⚠️ Channel created but topic not set after retries: ' + channel.name);
+  // Wait for topic to be set
+  for (let i = 0; i < 5; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    await channel.fetch();
+    if (channel.topic) break;
+  }
+
+  if (!channel.topic) {
+    console.log('⚠️ Topic not set yet: ' + channel.name);
     return;
   }
 
   console.log('✅ Topic: ' + channel.topic);
 
   const data = getData(channel.id, channel);
+  data.streak = 0;
+  data.specialBadges = [];
 
   if (channel.parentId === CATEGORY_SLEEP) {
     await updateRoleByCategory(channel, false);
-    data.streak = 0;
-    data.specialBadges = [];
     await renameChannelByCategory(channel, 0, []);
-    console.log('💤 Channel created in SLEEP category');
+    console.log('💤 Created in DORMANT');
   } else if (STREAK_CATEGORIES.includes(channel.parentId)) {
     await updateRoleByCategory(channel, true);
-    data.streak = 0;
-    data.specialBadges = [];
     await renameChannelByCategory(channel, 0, []);
-    console.log('✨ Channel created in ACTIVE category');
+    console.log('✨ Created in ' + getCategoryDisplayName(channel.parentId));
   }
 
   scheduleSave();
 } catch (err) {
-  console.error('❌ channelCreate error:', err);
+  console.error('❌ channelCreate error:', err.message);
 }
 ```
 
@@ -627,54 +633,76 @@ if (channel.type !== 0) return;
 client.on(‘channelUpdate’, async (oldCh, newCh) => {
 try {
 if (!newCh || newCh.type !== 0) return;
-if (oldCh.parentId === newCh.parentId) return;
+if (!ALL_TRACKED_CATEGORIES.includes(newCh.parentId) &&
+!ALL_TRACKED_CATEGORIES.includes(oldCh.parentId)) return;
 
 ```
-  console.log('🔄 ChannelUpdate: ' + newCh.name);
-  console.log('   Old parent: ' + oldCh.parentId + ' → New parent: ' + newCh.parentId);
+  // Category changed
+  if (oldCh.parentId !== newCh.parentId) {
+    console.log('🔄 Category change: ' + newCh.name);
+    console.log('   ' + getCategoryDisplayName(oldCh.parentId) + ' → ' + getCategoryDisplayName(newCh.parentId));
 
-  const data = getData(newCh.id, newCh);
+    const data = getData(newCh.id, newCh);
 
-  // Skip if this was an auto-move
-  if (data.isAutoMoving) {
-    data.isAutoMoving = false;
+    // Skip auto-moves
+    if (data.isAutoMoving) {
+      data.isAutoMoving = false;
+      scheduleSave();
+      console.log('⏭️ Skipped (auto-move)');
+      return;
+    }
+
+    // Wait for any updates
+    await new Promise(r => setTimeout(r, 500));
+    await newCh.fetch();
+
+    if (!newCh.topic) {
+      console.log('⚠️ No topic, skipping rename');
+      return;
+    }
+
+    if (STREAK_CATEGORIES.includes(newCh.parentId)) {
+      await updateRoleByCategory(newCh, true);
+      data.daysWithoutActivity = 0;
+      await renameChannelByCategory(newCh, data.streak, data.specialBadges);
+      await sendNotify(newCh, 'active');
+      console.log('✅ → Active category');
+    } else if (newCh.parentId === CATEGORY_SLEEP) {
+      await updateRoleByCategory(newCh, false);
+      data.streak = 0;
+      data.daysWithoutActivity = 0;
+      data.firstWebhook = null;
+      data.lastWebhook = null;
+      data.specialBadges = [];
+      await renameChannelByCategory(newCh, 0, []);
+      await sendNotify(newCh, 'sleep');
+      console.log('✅ → Dormant');
+    }
+
     scheduleSave();
-    console.log('⏭️ Skipped (auto-moving): ' + newCh.name);
-    return;
   }
 
-  // Refresh channel data
-  await new Promise(r => setTimeout(r, 500));
-  await newCh.fetch();
+  // Name changed - sync data
+  if (oldCh.name !== newCh.name) {
+    const newStreak = parseStreakFromName(newCh.name);
+    const newBadges = parseSpecialBadgesFromName(newCh.name);
+    const data = getData(newCh.id, newCh);
 
-  if (!newCh.topic) {
-    console.log('⚠️ Channel has no topic, skipping rename: ' + newCh.name);
-    return;
+    if (newStreak !== data.streak && newStreak >= 0) {
+      data.streak = newStreak;
+      console.log('🔄 Name changed, synced streak: ' + newCh.name + ' = ' + newStreak);
+    }
+
+    if (newBadges.length > 0 && JSON.stringify(newBadges) !== JSON.stringify(data.specialBadges)) {
+      data.specialBadges = newBadges;
+      console.log('🎨 Name changed, synced badges: ' + newBadges.join(''));
+    }
+
+    scheduleSave();
   }
 
-  console.log('📝 Topic: ' + newCh.topic);
-
-  if (STREAK_CATEGORIES.includes(newCh.parentId)) {
-    await updateRoleByCategory(newCh, true);
-    data.daysWithoutActivity = 0;
-    await renameChannelByCategory(newCh, data.streak, data.specialBadges);
-    await sendNotify(newCh, 'active');
-    console.log('✅ Moved to active category & renamed: ' + newCh.name);
-  } else if (newCh.parentId === CATEGORY_SLEEP) {
-    await updateRoleByCategory(newCh, false);
-    data.streak = 0;
-    data.daysWithoutActivity = 0;
-    data.firstWebhook = null;
-    data.lastWebhook = null;
-    data.specialBadges = [];
-    await renameChannelByCategory(newCh, 0, []);
-    await sendNotify(newCh, 'sleep');
-    console.log('✅ Moved to sleep category & renamed: ' + newCh.name);
-  }
-
-  scheduleSave();
 } catch (err) {
-  console.error('❌ channelUpdate error:', err);
+  console.error('❌ channelUpdate error:', err.message);
 }
 ```
 
@@ -684,7 +712,7 @@ client.on(‘channelDelete’, (channel) => {
 if (channelData.has(channel.id)) {
 channelData.delete(channel.id);
 scheduleSave();
-console.log(’🗑️ Cleaned up channel: ’ + channel.id);
+console.log(’🗑️ Cleaned up: ’ + channel.name);
 }
 });
 };
