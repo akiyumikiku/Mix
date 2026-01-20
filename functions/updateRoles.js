@@ -203,4 +203,3 @@ function setupRoleRemoveWatcher(client) {
 }
 
 module.exports = { updateMemberRoles, initRoleUpdater, setupRoleRemoveWatcher };
-EOF
