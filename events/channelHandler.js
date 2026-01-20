@@ -70,11 +70,20 @@ module.exports = (client) => {
       { r: /x(\d+)🌐/, s: '🌐' },
       { r: /x(\d+)🧩/, s: '🧩' }
     ];
+    
+    // Quét theo thứ tự: 🌸 -> 🌐 -> 🧩
     patterns.forEach(p => {
       const m = name.match(p.r);
-      if (m) badges.push('x' + m[1] + p.s);
-      else if (name.includes(p.s) && !badges.some(b => b.includes(p.s))) badges.push(p.s);
+      if (m) {
+        badges.push('x' + m[1] + p.s);
+      } else if (name.includes(p.s)) {
+        // Chỉ thêm badge đơn nếu chưa có badge này
+        if (!badges.some(b => b.includes(p.s))) {
+          badges.push(p.s);
+        }
+      }
     });
+    
     return badges;
   }
 
@@ -94,7 +103,7 @@ module.exports = (client) => {
         date: null,
         badges: ch ? parseBadges(ch.name) : [],
         moving: false,
-        webhookTimes: [] // Lưu thời gian các webhook trong ngày
+        webhookTimes: []
       });
     }
     return data.get(id);
@@ -117,11 +126,9 @@ module.exports = (client) => {
     return h + 'h ' + m + 'm';
   }
 
-  // Tối ưu: Chỉ tìm embed có keywords cụ thể
   function detectBiome(embed) {
     if (!embed?.title) return null;
     const t = embed.title.toUpperCase();
-    // Chỉ check các keywords cụ thể
     if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
     if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
     if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
@@ -140,26 +147,16 @@ module.exports = (client) => {
     return names[id] || 'Unknown';
   }
 
-  // Tính tổng thời gian hoạt động từ webhookTimes
-  // Phương pháp: Cộng dồn khoảng cách giữa các webhook liên tiếp (tối đa 10 phút mỗi khoảng)
   function calculateActiveTime(webhookTimes) {
     if (!webhookTimes || webhookTimes.length === 0) return 0;
-    if (webhookTimes.length === 1) return 0; // Chỉ 1 webhook thì chưa tính được thời gian
+    if (webhookTimes.length === 1) return 0;
     
-    // Sắp xếp thời gian
     const sorted = [...webhookTimes].sort((a, b) => a - b);
-    
-    // Khoảng cách tối đa giữa 2 webhook để tính vào thời gian hoạt động (10 phút)
-    const MAX_GAP = 10 * 60 * 1000; // 10 phút
-    
+    const MAX_GAP = 10 * 60 * 1000;
     let totalTime = 0;
     
-    // Cộng dồn khoảng cách giữa các webhook liên tiếp
     for (let i = 1; i < sorted.length; i++) {
       const gap = sorted[i] - sorted[i - 1];
-      
-      // Chỉ tính khoảng cách nếu <= 10 phút
-      // Nếu > 10 phút nghĩa là user nghỉ giữa chừng
       if (gap <= MAX_GAP) {
         totalTime += gap;
       }
@@ -197,25 +194,35 @@ module.exports = (client) => {
       const target = map[type];
       if (!target) return;
 
-      const existing = d.badges.find(b => b.includes(badge));
-      if (existing) {
+      // Tìm badge hiện tại của loại này (🌸, 🌐, hoặc 🧩)
+      const existingIndex = d.badges.findIndex(b => b.includes(badge));
+      
+      if (existingIndex !== -1) {
+        // Badge đã tồn tại -> tăng count
+        const existing = d.badges[existingIndex];
         const m = existing.match(/x(\d+)/);
         const count = m ? parseInt(m[1], 10) : 1;
-        d.badges = d.badges.filter(b => !b.includes(badge));
-        d.badges.unshift('x' + (count + 1) + badge);
-        console.log('Badge++ x' + (count + 1) + badge);
+        const newBadge = 'x' + (count + 1) + badge;
+        
+        // Thay thế badge cũ bằng badge mới
+        d.badges[existingIndex] = newBadge;
+        console.log('Badge updated: ' + existing + ' → ' + newBadge);
       } else {
-        if (d.badges.length > 0 && ch.parentId !== target) {
+        // Badge chưa tồn tại
+        if (ch.parentId === target) {
+          // Đã ở đúng category -> chỉ thêm badge
           d.badges.push(badge);
-        } else if (ch.parentId !== target) {
+          console.log('Badge added: ' + badge);
+        } else {
+          // Chưa ở category đặc biệt -> di chuyển và set badge
           d.badges = [badge];
           d.moving = true;
           await ch.setParent(target, { lockPermissions: false });
           await new Promise(r => setTimeout(r, 500));
-        } else {
-          d.badges = [badge];
+          console.log('Moved to ' + type + ' with badge: ' + badge);
         }
       }
+      
       await updateRole(ch, true);
       await renameChannelByCategory(ch, d.streak, d.badges);
       scheduleSave();
@@ -253,7 +260,6 @@ module.exports = (client) => {
       for (const [, ch] of channels) {
         const d = getData(ch.id, ch);
         
-        // Tính thời gian hoạt động từ webhookTimes
         const active = calculateActiveTime(d.webhookTimes);
         const hours = active / 3600000;
 
@@ -288,7 +294,6 @@ module.exports = (client) => {
           }
         }
         
-        // Reset webhook times cho ngày mới
         d.webhookTimes = [];
         d.first = null;
         d.last = null;
@@ -332,35 +337,36 @@ module.exports = (client) => {
     setTimeout(dailyCheck, wait);
   }
 
-  // Tối ưu: Chỉ quét embed có keywords cụ thể
+  // Quét embed để tìm biome (Dream/Cyber/Glitch)
   async function scanEmbeds(ch) {
     try {
-      console.log('Scanning embeds: ' + ch.name);
       const messages = await ch.messages.fetch({ limit: 50 });
+      const userId = getUserId(ch.topic);
+      if (!userId) return false;
+      
       for (const [, msg] of messages) {
-        if (msg.webhookId && msg.embeds?.length > 0) {
-          const userId = getUserId(ch.topic);
-          if (userId && msg.author.id === userId) {
-            for (const embed of msg.embeds) {
-              // Chỉ kiểm tra embed có title chứa keywords
-              if (embed.title) {
-                const title = embed.title.toUpperCase();
-                if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
-                  const biome = detectBiome(embed);
-                  if (biome) {
-                    console.log('Found: ' + biome.type);
-                    await moveToSpecial(ch, biome.type, biome.badge);
-                    return true;
-                  }
-                }
-              }
+        // Chỉ quét webhook message từ user này
+        if (!msg.webhookId || msg.author.id !== userId) continue;
+        if (!msg.embeds || msg.embeds.length === 0) continue;
+        
+        for (const embed of msg.embeds) {
+          if (!embed.title) continue;
+          
+          const title = embed.title.toUpperCase();
+          // Kiểm tra keywords
+          if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
+            const biome = detectBiome(embed);
+            if (biome) {
+              console.log('Found biome: ' + biome.type + ' in ' + ch.name);
+              await moveToSpecial(ch, biome.type, biome.badge);
+              return true;
             }
           }
         }
       }
       return false;
     } catch (e) {
-      console.error('Scan error:', e.message);
+      console.error('Scan embed error in ' + ch.name + ':', e.message);
       return false;
     }
   }
@@ -378,26 +384,39 @@ module.exports = (client) => {
           const badges = parseBadges(ch.name);
           const d = getData(ch.id, ch);
 
+          // Đồng bộ streak từ tên kênh
           if (streak !== d.streak && streak >= 0) {
             d.streak = streak;
             console.log('Synced streak: ' + ch.name + ' = ' + streak);
           }
+          
+          // Đồng bộ badges từ tên kênh
           if (badges.length > 0) {
             d.badges = badges;
             console.log('Synced badges: ' + ch.name);
           }
+          
+          // Reset webhook times nếu qua ngày mới
           if (d.date !== today) {
             d.webhookTimes = [];
             d.first = null;
             d.last = null;
           }
 
+          // Cập nhật role
           if (STREAK_CATS.includes(ch.parentId)) {
             await updateRole(ch, true);
           } else if (ch.parentId === CAT.SLEEP) {
             await updateRole(ch, false);
           }
 
+          // **QUAN TRỌNG: Quét embed cho TẤT CẢ kênh, kể cả trong Dream/Cyber/Glitch**
+          const foundBiome = await scanEmbeds(ch);
+          if (foundBiome) {
+            console.log('Found biome in ' + ch.name);
+          }
+
+          // Rename kênh theo format chuẩn
           await renameChannelByCategory(ch, d.streak, d.badges);
           count++;
         } catch (e) {
