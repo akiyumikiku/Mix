@@ -66,21 +66,30 @@ module.exports = (client) => {
 
   function parseBadges(name) {
     const badges = [];
-    const prefixMatch = name.match(/^(.+?)★】/);
-    if (!prefixMatch) return badges;
-    const prefix = prefixMatch[1];
-    const counted = prefix.match(/x(\d+)(🌸|🌐|🧩)/g);
-    if (counted) {
-      counted.forEach(badge => badges.push(badge));
+    
+    // Tìm phần trước ★】
+    const match = name.match(/^(.+?)★】/);
+    if (!match) return badges;
+    
+    const prefix = match[1];
+    
+    // Parse các badge có counter: x2🌸, x3🌐, x4🧩
+    const withCounter = prefix.match(/x\d+(🌸|🌐|🧩)/g);
+    if (withCounter) {
+      withCounter.forEach(b => badges.push(b));
     }
-    const single = prefix.match(/(?<!x\d)(🌸|🌐|🧩)/g);
-    if (single) {
-      single.forEach(s => {
-        if (!badges.some(b => b.includes(s))) {
-          badges.push(s);
+    
+    // Parse các badge đơn: 🌸, 🌐, 🧩 (không có xN ở trước)
+    const allBadges = prefix.match(/🌸|🌐|🧩/g);
+    if (allBadges) {
+      allBadges.forEach(emoji => {
+        // Chỉ thêm nếu chưa có trong badges (tránh trùng với xN🌸)
+        if (!badges.some(b => b.includes(emoji))) {
+          badges.push(emoji);
         }
       });
     }
+    
     return badges;
   }
 
