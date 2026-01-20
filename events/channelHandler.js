@@ -93,7 +93,8 @@ module.exports = (client) => {
         days: 0,
         date: null,
         badges: ch ? parseBadges(ch.name) : [],
-        moving: false
+        moving: false,
+        webhookTimes: [] // Lưu thời gian các webhook trong ngày
       });
     }
     return data.get(id);
@@ -116,9 +117,11 @@ module.exports = (client) => {
     return h + 'h ' + m + 'm';
   }
 
+  // Tối ưu: Chỉ tìm embed có keywords cụ thể
   function detectBiome(embed) {
     if (!embed?.title) return null;
     const t = embed.title.toUpperCase();
+    // Chỉ check các keywords cụ thể
     if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
     if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
     if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
@@ -135,6 +138,37 @@ module.exports = (client) => {
       [CAT.EMPTY]: 'Empty'
     };
     return names[id] || 'Unknown';
+  }
+
+  // Tính tổng thời gian hoạt động từ webhookTimes
+  // Phương pháp: Cộng dồn khoảng cách giữa các webhook liên tiếp (tối đa 10 phút mỗi khoảng)
+  function calculateActiveTime(webhookTimes) {
+    if (!webhookTimes || webhookTimes.length === 0) return 0;
+    if (webhookTimes.length === 1) return 0; // Chỉ 1 webhook thì chưa tính được thời gian
+    
+    // Sắp xếp thời gian
+    const sorted = [...webhookTimes].sort((a, b) => a - b);
+    
+    // Khoảng cách tối đa giữa 2 webhook để tính vào thời gian hoạt động (10 phút)
+    const MAX_GAP = 10 * 60 * 1000; // 10 phút
+    
+    let totalTime = 0;
+    
+    // Cộng dồn khoảng cách giữa các webhook liên tiếp
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = sorted[i] - sorted[i - 1];
+      
+      // Chỉ tính khoảng cách nếu <= 10 phút
+      // Nếu > 10 phút nghĩa là user nghỉ giữa chừng
+      if (gap <= MAX_GAP) {
+        totalTime += gap;
+      }
+    }
+    
+    const hours = (totalTime / 3600000).toFixed(2);
+    console.log('Webhooks: ' + sorted.length + ', Active time: ' + formatTime(totalTime) + ' (' + hours + 'h)');
+    
+    return totalTime;
   }
 
   async function updateRole(ch, add) {
@@ -218,8 +252,9 @@ module.exports = (client) => {
 
       for (const [, ch] of channels) {
         const d = getData(ch.id, ch);
-        let active = 0;
-        if (d.first && d.last) active = d.last - d.first;
+        
+        // Tính thời gian hoạt động từ webhookTimes
+        const active = calculateActiveTime(d.webhookTimes);
         const hours = active / 3600000;
 
         if (hours >= 18) results.above18h.push({ ch, active, streak: d.streak });
@@ -252,6 +287,9 @@ module.exports = (client) => {
             console.log('Warning ' + ch.name + ' day ' + d.days + '/3');
           }
         }
+        
+        // Reset webhook times cho ngày mới
+        d.webhookTimes = [];
         d.first = null;
         d.last = null;
         d.date = getDate();
@@ -294,6 +332,7 @@ module.exports = (client) => {
     setTimeout(dailyCheck, wait);
   }
 
+  // Tối ưu: Chỉ quét embed có keywords cụ thể
   async function scanEmbeds(ch) {
     try {
       console.log('Scanning embeds: ' + ch.name);
@@ -303,11 +342,17 @@ module.exports = (client) => {
           const userId = getUserId(ch.topic);
           if (userId && msg.author.id === userId) {
             for (const embed of msg.embeds) {
-              const biome = detectBiome(embed);
-              if (biome) {
-                console.log('Found: ' + biome.type);
-                await moveToSpecial(ch, biome.type, biome.badge);
-                return true;
+              // Chỉ kiểm tra embed có title chứa keywords
+              if (embed.title) {
+                const title = embed.title.toUpperCase();
+                if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
+                  const biome = detectBiome(embed);
+                  if (biome) {
+                    console.log('Found: ' + biome.type);
+                    await moveToSpecial(ch, biome.type, biome.badge);
+                    return true;
+                  }
+                }
               }
             }
           }
@@ -342,6 +387,7 @@ module.exports = (client) => {
             console.log('Synced badges: ' + ch.name);
           }
           if (d.date !== today) {
+            d.webhookTimes = [];
             d.first = null;
             d.last = null;
           }
@@ -380,38 +426,32 @@ module.exports = (client) => {
 
   client.on('messageCreate', async (msg) => {
     try {
-      // FIX: Kiểm tra webhook message chính xác hơn
       if (!msg.webhookId) return;
-      
       const ch = msg.channel;
       if (!ch?.parentId || !ALL_CATS.includes(ch.parentId)) return;
-      
       const userId = getUserId(ch.topic);
-      if (!userId) return;
-
-      // FIX: Chỉ cần kiểm tra webhook, không cần kiểm tra author.id
-      // vì webhook message có thể có author.id khác với userId trong topic
-      console.log('Webhook detected in: ' + ch.name + ' from user: ' + msg.author.id);
+      if (!userId || msg.author.id !== userId) return;
 
       const now = Date.now();
       const d = getData(ch.id, ch);
 
-      // Kiểm tra biome trước
+      // Kiểm tra và xử lý embed (chỉ quét embed có keywords)
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
-          const biome = detectBiome(embed);
-          if (biome) {
-            console.log('Biome detected: ' + biome.type);
-            await moveToSpecial(ch, biome.type, biome.badge);
+          if (embed.title) {
+            const title = embed.title.toUpperCase();
+            if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
+              const biome = detectBiome(embed);
+              if (biome) await moveToSpecial(ch, biome.type, biome.badge);
+            }
           }
         }
       }
 
-      // FIX: Tự động chuyển từ DORMANT/EMPTY lên ACTIVE khi có webhook
       if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
-        console.log('Reactivating channel from ' + getCatName(ch.parentId));
         const oldStreak = parseStreak(ch.name);
         d.streak = oldStreak > 0 ? oldStreak : 0;
+        d.webhookTimes = [now];
         d.first = now;
         d.last = now;
         d.days = 0;
@@ -426,7 +466,10 @@ module.exports = (client) => {
         return;
       }
 
-      // Update timestamps cho active channels
+      // Lưu thời gian webhook
+      if (!d.webhookTimes) d.webhookTimes = [];
+      d.webhookTimes.push(now);
+      
       if (!d.first) {
         d.first = now;
         console.log('First webhook: ' + ch.name);
@@ -457,6 +500,7 @@ module.exports = (client) => {
       const d = getData(ch.id, ch);
       d.streak = 0;
       d.badges = [];
+      d.webhookTimes = [];
 
       await scanEmbeds(ch);
 
@@ -507,6 +551,7 @@ module.exports = (client) => {
             await updateRole(ch, false);
             d.streak = 0;
             d.days = 0;
+            d.webhookTimes = [];
             d.first = null;
             d.last = null;
             d.badges = [];
