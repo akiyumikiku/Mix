@@ -8,6 +8,7 @@ async function getUsernameFromTopic(channel) {
       return username;
     }
   }
+  // Fallback: extract từ channel name
   const match = channel.name.match(/】(.+?)-macro$/);
   if (match) return match[1];
   return null;
@@ -25,25 +26,50 @@ async function renameChannelByCategory(channel, streak = 0, specialBadges = []) 
     };
 
     if (!channel || !channel.topic) return;
+
     const username = await getUsernameFromTopic(channel);
     if (!username) return;
+
     const config = categories[channel.parentId];
     if (!config) return;
 
-    let prefix = config.prefix;
-    let streakBadge = config.streak ? '〔' + streak + '🔥〕' : '';
-    let specialPrefix = '';
-
+    // FIX: Tạo tên channel từ đầu để tránh đè chồng
+    let name = '';
+    
+    // Thêm special badges
     if (specialBadges.length > 0) {
-      specialPrefix = specialBadges.join('');
-      if (config.sleep) specialPrefix += '💤';
+      name += specialBadges.join('');
+    }
+    
+    // Thêm prefix theo category
+    name += config.prefix;
+    
+    // Thêm streak badge nếu category cho phép
+    if (config.streak && streak > 0) {
+      name += '〔' + streak + '🔥〕';
+    }
+    
+    // Thêm sleep emoji cho dormant channels
+    if (config.sleep && specialBadges.length > 0) {
+      // Chỉ thêm 💤 nếu chưa có trong special badges
+      if (!name.includes('💤')) {
+        name += '💤';
+      }
+    }
+    
+    // Thêm username và suffix
+    name += username + '-macro';
+
+    // Giới hạn độ dài
+    if (name.length > 100) {
+      name = name.substring(0, 100);
     }
 
-    let name = specialPrefix + prefix + streakBadge + username + '-macro';
-    if (name.length > 100) name = name.substring(0, 100);
-
+    // Chỉ rename nếu tên khác
     if (channel.name !== name) {
-      await channel.setName(name).catch(() => {});
+      await channel.setName(name).catch((err) => {
+        console.error('Rename failed:', err.message);
+      });
       console.log('Renamed: ' + name);
     }
   } catch (err) {
@@ -52,6 +78,7 @@ async function renameChannelByCategory(channel, streak = 0, specialBadges = []) 
 }
 
 const renaming = new Set();
+
 async function safeRename(channel, streak, specialBadges) {
   if (renaming.has(channel.id)) return;
   renaming.add(channel.id);
