@@ -71,13 +71,11 @@ module.exports = (client) => {
       { r: /x(\d+)🧩/, s: '🧩' }
     ];
     
-    // Quét theo thứ tự: 🌸 -> 🌐 -> 🧩
     patterns.forEach(p => {
       const m = name.match(p.r);
       if (m) {
         badges.push('x' + m[1] + p.s);
       } else if (name.includes(p.s)) {
-        // Chỉ thêm badge đơn nếu chưa có badge này
         if (!badges.some(b => b.includes(p.s))) {
           badges.push(p.s);
         }
@@ -103,7 +101,8 @@ module.exports = (client) => {
         date: null,
         badges: ch ? parseBadges(ch.name) : [],
         moving: false,
-        webhookTimes: []
+        webhookTimes: [],
+        firstBiome: null // Lưu biome đầu tiên để xác định category
       });
     }
     return data.get(id);
@@ -187,68 +186,52 @@ module.exports = (client) => {
     }
   }
 
-  async function moveToSpecial(ch, type, badge) {
+  async function handleBiome(ch, type, badge) {
     try {
       const d = getData(ch.id, ch);
       const map = { DREAMSPACE: CAT.DREAM, CYBERSPACE: CAT.CYBER, GLITCHED: CAT.GLITCH };
-      const target = map[type];
-      if (!target) return;
+      const targetCat = map[type];
+      if (!targetCat) return;
 
-      // Tìm badge hiện tại của loại này (🌸, 🌐, hoặc 🧩)
+      // Tìm badge hiện tại của loại này
       const existingIndex = d.badges.findIndex(b => b.includes(badge));
       
       if (existingIndex !== -1) {
-        // Badge đã tồn tại -> tăng count
+        // Badge đã tồn tại → tăng counter
         const existing = d.badges[existingIndex];
         const m = existing.match(/x(\d+)/);
         const count = m ? parseInt(m[1], 10) : 1;
-        const newBadge = 'x' + (count + 1) + badge;
-        
-        // Thay thế badge cũ bằng badge mới
-        d.badges[existingIndex] = newBadge;
-        console.log('Badge updated: ' + existing + ' → ' + newBadge);
+        d.badges[existingIndex] = 'x' + (count + 1) + badge;
+        console.log('Badge++: ' + existing + ' → x' + (count + 1) + badge);
+        await renameChannelByCategory(ch, d.streak, d.badges);
       } else {
         // Badge chưa tồn tại
-        if (ch.parentId === target) {
-          // Đã ở đúng category -> chỉ thêm badge
-          d.badges.push(badge);
-          console.log('Badge added: ' + badge);
-        } else {
-          // Chưa ở category đặc biệt -> di chuyển và set badge
+        if (!d.firstBiome) {
+          // Lần đầu tiên có biome → di chuyển category + set badge
+          d.firstBiome = type;
           d.badges = [badge];
           d.moving = true;
-          await ch.setParent(target, { lockPermissions: false });
+          await ch.setParent(targetCat, { lockPermissions: false });
           await new Promise(r => setTimeout(r, 500));
-          console.log('Moved to ' + type + ' with badge: ' + badge);
+          console.log('First biome: ' + type + ', moved to ' + getCatName(targetCat));
+        } else {
+          // Đã có biome khác rồi → CHỈ thêm badge, KHÔNG di chuyển
+          d.badges.push(badge);
+          console.log('Added new badge: ' + badge + ' (staying in ' + getCatName(ch.parentId) + ')');
         }
+        await renameChannelByCategory(ch, d.streak, d.badges);
       }
       
       await updateRole(ch, true);
-      await renameChannelByCategory(ch, d.streak, d.badges);
       scheduleSave();
     } catch (e) {
-      console.error('Special error:', e.message);
+      console.error('Biome error:', e.message);
     }
-  }
-
-  async function notify(ch, type, extra = {}) {
-    try {
-      const userId = getUserId(ch.topic);
-      if (!userId) return;
-      const msg = {
-        sleep: '<@' + userId + '>\n💤 Moved to DORMANT (3 days inactive)',
-        active: '<@' + userId + '>\n✨ Reactivated!',
-        warning: '<@' + userId + '> ⚠️ **Warning!**\n' + extra.time + ' today (need 6h+)\nStreak: **' + extra.streak + '** 🔥\nDay ' + extra.days + '/3',
-        lost: '<@' + userId + '> 💔 **Streak Lost!**\n' + extra.time + ' today\n**' + extra.old + ' → 0** 🔥',
-        saved: '<@' + userId + '> ✅ **Streak Saved!**\n6+ hours today\nStreak: **' + extra.streak + '** 🔥'
-      };
-      if (msg[type]) await ch.send(msg[type]);
-    } catch (e) {}
   }
 
   async function dailyCheck() {
     try {
-      console.log('Daily check 13:00 VN');
+      console.log('=== Daily Check 13:00 VN ===');
       const guild = client.guilds.cache.first();
       if (!guild) return;
       const report = await guild.channels.fetch(REPORT).catch(() => null);
@@ -271,26 +254,23 @@ module.exports = (client) => {
           d.streak++;
           d.days = 0;
           await renameChannelByCategory(ch, d.streak, d.badges);
-          console.log('Streak++ ' + ch.name + ' = ' + d.streak);
-          await notify(ch, 'saved', { streak: d.streak });
+          console.log('✅ Streak saved: ' + ch.name + ' → ' + d.streak);
         } else {
           const old = d.streak;
           d.days++;
           if (d.days >= 3) {
             d.streak = 0;
             d.badges = [];
+            d.firstBiome = null;
             d.moving = true;
             await ch.setParent(CAT.SLEEP, { lockPermissions: false });
             await new Promise(r => setTimeout(r, 500));
             await updateRole(ch, false);
             d.days = 0;
             await renameChannelByCategory(ch, 0, []);
-            await notify(ch, 'lost', { time: formatTime(active), old: old });
-            await notify(ch, 'sleep');
-            console.log('To DORMANT: ' + ch.name);
+            console.log('💤 To Dormant: ' + ch.name + ' (' + formatTime(active) + ', lost ' + old + ' streak)');
           } else {
-            await notify(ch, 'warning', { time: formatTime(active), streak: d.streak, days: d.days });
-            console.log('Warning ' + ch.name + ' day ' + d.days + '/3');
+            console.log('⚠️ Warning: ' + ch.name + ' day ' + d.days + '/3 (' + formatTime(active) + ')');
           }
         }
         
@@ -302,6 +282,7 @@ module.exports = (client) => {
 
       scheduleSave();
 
+      // Tạo báo cáo
       const embeds = [];
       const date = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
       const configs = [
@@ -319,9 +300,9 @@ module.exports = (client) => {
 
       if (embeds.length > 0) {
         await report.send({ content: '📊 **Daily Report** - ' + date, embeds });
-        console.log('Report sent');
+        console.log('📊 Report sent');
       } else {
-        await report.send({ content: '📊 **Daily Report** - ' + date + '\nNo 6+ hour channels' });
+        await report.send({ content: '📊 **Daily Report** - ' + date + '\n❌ No 6+ hour channels' });
       }
     } catch (e) {
       console.error('Daily error:', e.message);
@@ -337,7 +318,6 @@ module.exports = (client) => {
     setTimeout(dailyCheck, wait);
   }
 
-  // Quét embed để tìm biome (Dream/Cyber/Glitch)
   async function scanEmbeds(ch) {
     try {
       const messages = await ch.messages.fetch({ limit: 50 });
@@ -345,7 +325,6 @@ module.exports = (client) => {
       if (!userId) return false;
       
       for (const [, msg] of messages) {
-        // Chỉ quét webhook message từ user này
         if (!msg.webhookId || msg.author.id !== userId) continue;
         if (!msg.embeds || msg.embeds.length === 0) continue;
         
@@ -353,12 +332,11 @@ module.exports = (client) => {
           if (!embed.title) continue;
           
           const title = embed.title.toUpperCase();
-          // Kiểm tra keywords
           if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
             const biome = detectBiome(embed);
             if (biome) {
-              console.log('Found biome: ' + biome.type + ' in ' + ch.name);
-              await moveToSpecial(ch, biome.type, biome.badge);
+              console.log('🔍 Found biome: ' + biome.type + ' in ' + ch.name);
+              await handleBiome(ch, biome.type, biome.badge);
               return true;
             }
           }
@@ -373,7 +351,7 @@ module.exports = (client) => {
 
   async function scanAll(guild) {
     try {
-      console.log('Scanning all channels');
+      console.log('=== Scanning All Channels ===');
       const channels = guild.channels.cache.filter(c => c.type === 0 && ALL_CATS.includes(c.parentId));
       const today = getDate();
       let count = 0;
@@ -384,39 +362,33 @@ module.exports = (client) => {
           const badges = parseBadges(ch.name);
           const d = getData(ch.id, ch);
 
-          // Đồng bộ streak từ tên kênh
           if (streak !== d.streak && streak >= 0) {
             d.streak = streak;
             console.log('Synced streak: ' + ch.name + ' = ' + streak);
           }
           
-          // Đồng bộ badges từ tên kênh
           if (badges.length > 0) {
             d.badges = badges;
             console.log('Synced badges: ' + ch.name);
           }
           
-          // Reset webhook times nếu qua ngày mới
           if (d.date !== today) {
             d.webhookTimes = [];
             d.first = null;
             d.last = null;
           }
 
-          // Cập nhật role
           if (STREAK_CATS.includes(ch.parentId)) {
             await updateRole(ch, true);
           } else if (ch.parentId === CAT.SLEEP) {
             await updateRole(ch, false);
           }
 
-          // **QUAN TRỌNG: Quét embed cho TẤT CẢ kênh, kể cả trong Dream/Cyber/Glitch**
           const foundBiome = await scanEmbeds(ch);
           if (foundBiome) {
-            console.log('Found biome in ' + ch.name);
+            console.log('✅ Found & processed biome in ' + ch.name);
           }
 
-          // Rename kênh theo format chuẩn
           await renameChannelByCategory(ch, d.streak, d.badges);
           count++;
         } catch (e) {
@@ -425,7 +397,7 @@ module.exports = (client) => {
       }
 
       scheduleSave();
-      console.log('Synced ' + count + ' channels');
+      console.log('✅ Synced ' + count + ' channels');
     } catch (e) {
       console.error('Scan error:', e.message);
     }
@@ -435,7 +407,7 @@ module.exports = (client) => {
     try {
       const guild = client.guilds.cache.first();
       if (!guild) return;
-      console.log('Bot ready - scanning');
+      console.log('🤖 Bot ready - starting scan');
       await scanAll(guild);
       scheduleDailyCheck();
     } catch (e) {
@@ -454,19 +426,20 @@ module.exports = (client) => {
       const now = Date.now();
       const d = getData(ch.id, ch);
 
-      // Kiểm tra và xử lý embed (chỉ quét embed có keywords)
+      // Kiểm tra embed
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
           if (embed.title) {
             const title = embed.title.toUpperCase();
             if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
               const biome = detectBiome(embed);
-              if (biome) await moveToSpecial(ch, biome.type, biome.badge);
+              if (biome) await handleBiome(ch, biome.type, biome.badge);
             }
           }
         }
       }
 
+      // Reactivate từ Sleep/Empty
       if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
         const oldStreak = parseStreak(ch.name);
         d.streak = oldStreak > 0 ? oldStreak : 0;
@@ -479,13 +452,11 @@ module.exports = (client) => {
         await new Promise(r => setTimeout(r, 500));
         await updateRole(ch, true);
         await renameChannelByCategory(ch, d.streak, d.badges);
-        await notify(ch, 'active');
         scheduleSave();
-        console.log('Reactivated: ' + ch.name);
+        console.log('✨ Reactivated: ' + ch.name);
         return;
       }
 
-      // Lưu thời gian webhook
       if (!d.webhookTimes) d.webhookTimes = [];
       d.webhookTimes.push(now);
       
@@ -503,7 +474,7 @@ module.exports = (client) => {
   client.on('channelCreate', async (ch) => {
     try {
       if (ch.type !== 0 || !ALL_CATS.includes(ch.parentId)) return;
-      console.log('Channel created: ' + ch.name);
+      console.log('➕ Channel created: ' + ch.name);
 
       for (let i = 0; i < 5; i++) {
         await new Promise(r => setTimeout(r, 500));
@@ -520,6 +491,7 @@ module.exports = (client) => {
       d.streak = 0;
       d.badges = [];
       d.webhookTimes = [];
+      d.firstBiome = null;
 
       await scanEmbeds(ch);
 
@@ -546,7 +518,7 @@ module.exports = (client) => {
 
       try {
         if (old.parentId !== ch.parentId) {
-          console.log('Category change: ' + ch.name);
+          console.log('📦 Category change: ' + ch.name);
           const d = getData(ch.id, ch);
 
           if (d.moving) {
@@ -565,7 +537,6 @@ module.exports = (client) => {
             await updateRole(ch, true);
             d.days = 0;
             await renameChannelByCategory(ch, d.streak, d.badges);
-            await notify(ch, 'active');
           } else if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
             await updateRole(ch, false);
             d.streak = 0;
@@ -574,8 +545,8 @@ module.exports = (client) => {
             d.first = null;
             d.last = null;
             d.badges = [];
+            d.firstBiome = null;
             await renameChannelByCategory(ch, 0, []);
-            if (ch.parentId === CAT.SLEEP) await notify(ch, 'sleep');
           }
 
           await scanEmbeds(ch);
@@ -610,7 +581,7 @@ module.exports = (client) => {
     if (data.has(ch.id)) {
       data.delete(ch.id);
       scheduleSave();
-      console.log('Deleted: ' + ch.name);
+      console.log('🗑️ Deleted: ' + ch.name);
     }
   });
 };
