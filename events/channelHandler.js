@@ -194,30 +194,35 @@ module.exports = (client) => {
       const targetCat = map[type];
       if (!targetCat) return;
 
+      // Tìm badge cùng loại
       const existingIndex = d.badges.findIndex(b => b.includes(badge));
       
       if (existingIndex !== -1) {
+        // Badge đã tồn tại → tăng counter
         const existing = d.badges[existingIndex];
         const m = existing.match(/x(\d+)/);
         const count = m ? parseInt(m[1], 10) : 1;
         d.badges[existingIndex] = 'x' + (count + 1) + badge;
         console.log('Badge++: ' + existing + ' → x' + (count + 1) + badge);
-        await renameChannelByCategory(ch, d.streak, d.badges);
       } else {
+        // Badge chưa tồn tại
         if (!d.firstBiome) {
+          // Lần đầu tiên có biome → di chuyển category + set badge
           d.firstBiome = type;
           d.badges = [badge];
           d.moving = true;
           await ch.setParent(targetCat, { lockPermissions: false });
           await new Promise(r => setTimeout(r, 500));
-          console.log('First biome: ' + type + ', moved to ' + getCatName(targetCat));
+          console.log('🌟 First biome: ' + type + ', moved to ' + getCatName(targetCat));
         } else {
+          // Đã có biome khác rồi → CHỈ thêm badge, KHÔNG di chuyển
           d.badges.push(badge);
-          console.log('Added new badge: ' + badge + ' (staying in ' + getCatName(ch.parentId) + ')');
+          console.log('➕ Added new badge: ' + badge + ' (staying in ' + getCatName(ch.parentId) + ')');
         }
-        await renameChannelByCategory(ch, d.streak, d.badges);
       }
       
+      // Rename sau khi xử lý badge
+      await renameChannelByCategory(ch, d.streak, d.badges);
       await updateRole(ch, true);
       scheduleSave();
     } catch (e) {
@@ -422,19 +427,17 @@ module.exports = (client) => {
       const d = getData(ch.id, ch);
       const currentParent = ch.parentId;
 
+      console.log('📨 Webhook in ' + ch.name + ' (category: ' + getCatName(currentParent) + ')');
+
       // === XỬ LÝ EMBED ĐẶC BIỆT (BIOME) ===
       let hasSpecialBiome = false;
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
-          if (embed.title) {
-            const title = embed.title.toUpperCase();
-            if (title.includes('DREAMSPACE') || title.includes('CYBERSPACE') || title.includes('GLITCH')) {
-              const biome = detectBiome(embed);
-              if (biome) {
-                await handleBiome(ch, biome.type, biome.badge);
-                hasSpecialBiome = true;
-              }
-            }
+          const biome = detectBiome(embed);
+          if (biome) {
+            console.log('🎯 Detected biome: ' + biome.type);
+            await handleBiome(ch, biome.type, biome.badge);
+            hasSpecialBiome = true;
           }
         }
       }
