@@ -138,6 +138,146 @@ module.exports = (client) => {
     // Check title
     if (embed.title) {
       const t = embed.title.toUpperCase();
+      if (t.includes('const { renameChannelByCategory } = require('../functions/rename');
+const { EmbedBuilder } = require('discord.js');
+const fs = require('fs').promises;
+const fsSync = require('fs');
+const path = require('path');
+
+const CAT = {
+  SLEEP: '1427958263281881088',
+  ACTIVE: '1411034825699233943',
+  CYBER: '1446077580615880735',
+  DREAM: '1445997821336748155',
+  GLITCH: '1445997659948060712',
+  EMPTY: '1463173837389828097'
+};
+
+const ROLE = '1411991634194989096';
+const REPORT = '1438039815919632394';
+const FILE = path.join(__dirname, '../data/streaks.json');
+const STREAK_CATS = [CAT.ACTIVE, CAT.CYBER, CAT.DREAM, CAT.GLITCH];
+const BIOME_CATS = [CAT.CYBER, CAT.DREAM, CAT.GLITCH]; // 3 danh mục biome đặc biệt
+const ALL_CATS = Object.values(CAT);
+
+module.exports = (client) => {
+  const data = new Map();
+  let saveTimer = null;
+  let saving = false;
+  const processing = new Set();
+
+  function load() {
+    try {
+      if (fsSync.existsSync(FILE)) {
+        const json = JSON.parse(fsSync.readFileSync(FILE, 'utf8'));
+        Object.entries(json).forEach(([id, info]) => data.set(id, info));
+        console.log('Loaded ' + data.size + ' channels');
+      }
+    } catch (e) {
+      console.error('Load error:', e.message);
+    }
+  }
+
+  async function save() {
+    if (saving) return;
+    try {
+      saving = true;
+      const dir = path.dirname(FILE);
+      if (!fsSync.existsSync(dir)) await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(FILE, JSON.stringify(Object.fromEntries(data), null, 2), 'utf8');
+    } catch (e) {
+      console.error('Save error:', e.message);
+    } finally {
+      saving = false;
+    }
+  }
+
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 2000);
+  }
+
+  load();
+
+  function parseStreak(name) {
+    const m = name.match(/〔(\d+)🔥〕/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function parseBadges(name) {
+    const badges = [];
+    
+    // Tách phần prefix trước ★】
+    const prefixMatch = name.match(/^(.+?)★】/);
+    if (!prefixMatch) return badges;
+    
+    const prefix = prefixMatch[1];
+    
+    // Parse x2🌸, x3🌐, x4🧩
+    const counted = prefix.match(/x(\d+)(🌸|🌐|🧩)/g);
+    if (counted) {
+      counted.forEach(badge => badges.push(badge));
+    }
+    
+    // Parse 🌸, 🌐, 🧩 đơn lẻ (không có số)
+    const single = prefix.match(/(?<!x\d)(🌸|🌐|🧩)/g);
+    if (single) {
+      single.forEach(s => {
+        if (!badges.some(b => b.includes(s))) {
+          badges.push(s);
+        }
+      });
+    }
+    
+    return badges;
+  }
+
+  function getUserId(topic) {
+    if (!topic) return null;
+    const parts = topic.trim().split(/\s+/);
+    return parts.length >= 2 && /^\d{17,20}$/.test(parts[1]) ? parts[1] : null;
+  }
+
+  function getData(id, ch = null) {
+    if (!data.has(id)) {
+      data.set(id, {
+        streak: ch ? parseStreak(ch.name) : 0,
+        first: null,
+        last: null,
+        days: 0,
+        date: null,
+        badges: ch ? parseBadges(ch.name) : [],
+        moving: false,
+        webhookTimes: [],
+        firstBiome: null
+      });
+    }
+    return data.get(id);
+  }
+
+  function getDate() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function getNext13H() {
+    const now = new Date();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 0, 0));
+    if (now >= next) next.setUTCDate(next.getUTCDate() + 1);
+    return next;
+  }
+
+  function formatTime(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h + 'h ' + m + 'm';
+  }
+
+  function detectBiome(embed) {
+    if (!embed) return null;
+    
+    // Check title
+    if (embed.title) {
+      const t = embed.title.toUpperCase();
       if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
       if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
       if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
@@ -448,19 +588,42 @@ module.exports = (client) => {
 
       console.log('📨 Webhook from ' + msg.author.tag + ' in ' + ch.name);
       console.log('   Category: ' + getCatName(currentParent));
+      console.log('   Content: ' + (msg.content ? msg.content.substring(0, 50) : 'empty'));
       console.log('   Embeds: ' + (msg.embeds?.length || 0));
 
-      // === XỬ LÝ EMBED ĐẶC BIỆT (BIOME) ===
+      // === XỬ LÝ BIOME ĐẶC BIỆT ===
       let hasSpecialBiome = false;
+      
+      // 1. Check trong EMBEDS
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
           console.log('   📋 Embed title: ' + (embed.title || 'no title'));
           const biome = detectBiome(embed);
           if (biome) {
-            console.log('   🎯 Detected biome: ' + biome.type);
+            console.log('   🎯 Detected biome from EMBED: ' + biome.type);
             await handleBiome(ch, biome.type, biome.badge);
             hasSpecialBiome = true;
           }
+        }
+      }
+      
+      // 2. Check trong TEXT CONTENT (nếu chưa tìm thấy biome)
+      if (!hasSpecialBiome && msg.content) {
+        const contentUpper = msg.content.toUpperCase();
+        let biome = null;
+        
+        if (contentUpper.includes('DREAMSPACE')) {
+          biome = { type: 'DREAMSPACE', badge: '🌸' };
+        } else if (contentUpper.includes('CYBERSPACE')) {
+          biome = { type: 'CYBERSPACE', badge: '🌐' };
+        } else if (contentUpper.includes('GLITCH')) {
+          biome = { type: 'GLITCHED', badge: '🧩' };
+        }
+        
+        if (biome) {
+          console.log('   🎯 Detected biome from TEXT: ' + biome.type);
+          await handleBiome(ch, biome.type, biome.badge);
+          hasSpecialBiome = true;
         }
       }
 
