@@ -380,23 +380,36 @@ module.exports = (client) => {
 
   client.on('messageCreate', async (msg) => {
     try {
+      // FIX: Kiểm tra webhook message chính xác hơn
       if (!msg.webhookId) return;
+      
       const ch = msg.channel;
       if (!ch?.parentId || !ALL_CATS.includes(ch.parentId)) return;
+      
       const userId = getUserId(ch.topic);
-      if (!userId || msg.author.id !== userId) return;
+      if (!userId) return;
+
+      // FIX: Chỉ cần kiểm tra webhook, không cần kiểm tra author.id
+      // vì webhook message có thể có author.id khác với userId trong topic
+      console.log('Webhook detected in: ' + ch.name + ' from user: ' + msg.author.id);
 
       const now = Date.now();
       const d = getData(ch.id, ch);
 
+      // Kiểm tra biome trước
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
           const biome = detectBiome(embed);
-          if (biome) await moveToSpecial(ch, biome.type, biome.badge);
+          if (biome) {
+            console.log('Biome detected: ' + biome.type);
+            await moveToSpecial(ch, biome.type, biome.badge);
+          }
         }
       }
 
+      // FIX: Tự động chuyển từ DORMANT/EMPTY lên ACTIVE khi có webhook
       if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
+        console.log('Reactivating channel from ' + getCatName(ch.parentId));
         const oldStreak = parseStreak(ch.name);
         d.streak = oldStreak > 0 ? oldStreak : 0;
         d.first = now;
@@ -413,6 +426,7 @@ module.exports = (client) => {
         return;
       }
 
+      // Update timestamps cho active channels
       if (!d.first) {
         d.first = now;
         console.log('First webhook: ' + ch.name);
