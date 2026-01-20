@@ -8,70 +8,63 @@ async function getUsernameFromTopic(channel) {
       return username;
     }
   }
-  // Fallback: extract từ channel name
   const match = channel.name.match(/】(.+?)-macro$/);
   if (match) return match[1];
   return null;
 }
 
+// Hàm tạo tên kênh dự kiến
+function buildExpectedName(categoryId, streak, specialBadges, username) {
+  const categories = {
+    '1427958263281881088': { prefix: '⏰★】', streak: false, sleep: true },
+    '1411034825699233943': { prefix: '🛠★】', streak: true, sleep: false },
+    '1446077580615880735': { prefix: '🌐★】', streak: true, sleep: false },
+    '1445997821336748155': { prefix: '🌸★】', streak: true, sleep: false },
+    '1445997659948060712': { prefix: '🧩★】', streak: true, sleep: false },
+    '1463173837389828097': { prefix: '🤍★】', streak: false, sleep: false }
+  };
+
+  const config = categories[categoryId];
+  if (!config) return null;
+
+  let prefix = config.prefix;
+  let streakBadge = config.streak ? '〔' + streak + '🔥〕' : '';
+  let specialPrefix = '';
+  
+  if (specialBadges.length > 0) {
+    specialPrefix = specialBadges.join('');
+    if (config.sleep) specialPrefix += '💤';
+  }
+
+  let name = specialPrefix + prefix + streakBadge + username + '-macro';
+  if (name.length > 100) name = name.substring(0, 100);
+  
+  return name;
+}
+
 async function renameChannelByCategory(channel, streak = 0, specialBadges = []) {
   try {
-    const categories = {
-      '1427958263281881088': { prefix: '⏰★】', streak: false, sleep: true },
-      '1411034825699233943': { prefix: '🛠★】', streak: true, sleep: false },
-      '1446077580615880735': { prefix: '🌐★】', streak: true, sleep: false },
-      '1445997821336748155': { prefix: '🌸★】', streak: true, sleep: false },
-      '1445997659948060712': { prefix: '🧩★】', streak: true, sleep: false },
-      '1463173837389828097': { prefix: '🤍★】', streak: false, sleep: false }
-    };
-
     if (!channel || !channel.topic) return;
-
+    
     const username = await getUsernameFromTopic(channel);
     if (!username) return;
 
-    const config = categories[channel.parentId];
-    if (!config) return;
+    // Tạo tên kênh dự kiến
+    const expectedName = buildExpectedName(channel.parentId, streak, specialBadges, username);
+    if (!expectedName) return;
 
-    // FIX: Tạo tên channel từ đầu để tránh đè chồng
-    let name = '';
-    
-    // Thêm special badges
-    if (specialBadges.length > 0) {
-      name += specialBadges.join('');
-    }
-    
-    // Thêm prefix theo category
-    name += config.prefix;
-    
-    // Thêm streak badge nếu category cho phép
-    if (config.streak && streak > 0) {
-      name += '〔' + streak + '🔥〕';
-    }
-    
-    // Thêm sleep emoji cho dormant channels
-    if (config.sleep && specialBadges.length > 0) {
-      // Chỉ thêm 💤 nếu chưa có trong special badges
-      if (!name.includes('💤')) {
-        name += '💤';
-      }
-    }
-    
-    // Thêm username và suffix
-    name += username + '-macro';
-
-    // Giới hạn độ dài
-    if (name.length > 100) {
-      name = name.substring(0, 100);
+    // Kiểm tra nếu tên kênh hiện tại đã đúng thì bỏ qua
+    if (channel.name === expectedName) {
+      console.log('Channel name already correct: ' + channel.name);
+      return;
     }
 
-    // Chỉ rename nếu tên khác
-    if (channel.name !== name) {
-      await channel.setName(name).catch((err) => {
-        console.error('Rename failed:', err.message);
-      });
-      console.log('Renamed: ' + name);
-    }
+    // Chỉ rename khi tên khác
+    await channel.setName(expectedName).catch((err) => {
+      console.error('Failed to rename:', err.message);
+    });
+    console.log('Renamed: ' + channel.name + ' → ' + expectedName);
+    
   } catch (err) {
     console.error('Rename error:', err.message);
   }
@@ -80,7 +73,11 @@ async function renameChannelByCategory(channel, streak = 0, specialBadges = []) 
 const renaming = new Set();
 
 async function safeRename(channel, streak, specialBadges) {
-  if (renaming.has(channel.id)) return;
+  if (renaming.has(channel.id)) {
+    console.log('Already renaming: ' + channel.id);
+    return;
+  }
+  
   renaming.add(channel.id);
   try {
     await renameChannelByCategory(channel, streak, specialBadges);
