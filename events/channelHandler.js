@@ -66,22 +66,28 @@ module.exports = (client) => {
 
   function parseBadges(name) {
     const badges = [];
-    const patterns = [
-      { r: /x(\d+)🌸/, s: '🌸' },
-      { r: /x(\d+)🌐/, s: '🌐' },
-      { r: /x(\d+)🧩/, s: '🧩' }
-    ];
     
-    patterns.forEach(p => {
-      const m = name.match(p.r);
-      if (m) {
-        badges.push('x' + m[1] + p.s);
-      } else if (name.includes(p.s)) {
-        if (!badges.some(b => b.includes(p.s))) {
-          badges.push(p.s);
+    // Tách phần prefix trước ★】
+    const prefixMatch = name.match(/^(.+?)★】/);
+    if (!prefixMatch) return badges;
+    
+    const prefix = prefixMatch[1];
+    
+    // Parse x2🌸, x3🌐, x4🧩
+    const counted = prefix.match(/x(\d+)(🌸|🌐|🧩)/g);
+    if (counted) {
+      counted.forEach(badge => badges.push(badge));
+    }
+    
+    // Parse 🌸, 🌐, 🧩 đơn lẻ (không có số)
+    const single = prefix.match(/(?<!x\d)(🌸|🌐|🧩)/g);
+    if (single) {
+      single.forEach(s => {
+        if (!badges.some(b => b.includes(s))) {
+          badges.push(s);
         }
-      }
-    });
+      });
+    }
     
     return badges;
   }
@@ -127,11 +133,24 @@ module.exports = (client) => {
   }
 
   function detectBiome(embed) {
-    if (!embed?.title) return null;
-    const t = embed.title.toUpperCase();
-    if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
-    if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
-    if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
+    if (!embed) return null;
+    
+    // Check title
+    if (embed.title) {
+      const t = embed.title.toUpperCase();
+      if (t.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
+      if (t.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
+      if (t.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
+    }
+    
+    // Check description
+    if (embed.description) {
+      const d = embed.description.toUpperCase();
+      if (d.includes('DREAMSPACE')) return { type: 'DREAMSPACE', badge: '🌸' };
+      if (d.includes('CYBERSPACE')) return { type: 'CYBERSPACE', badge: '🌐' };
+      if (d.includes('GLITCH')) return { type: 'GLITCHED', badge: '🧩' };
+    }
+    
     return null;
   }
 
@@ -427,15 +446,18 @@ module.exports = (client) => {
       const d = getData(ch.id, ch);
       const currentParent = ch.parentId;
 
-      console.log('📨 Webhook in ' + ch.name + ' (category: ' + getCatName(currentParent) + ')');
+      console.log('📨 Webhook from ' + msg.author.tag + ' in ' + ch.name);
+      console.log('   Category: ' + getCatName(currentParent));
+      console.log('   Embeds: ' + (msg.embeds?.length || 0));
 
       // === XỬ LÝ EMBED ĐẶC BIỆT (BIOME) ===
       let hasSpecialBiome = false;
       if (msg.embeds?.length > 0) {
         for (const embed of msg.embeds) {
+          console.log('   📋 Embed title: ' + (embed.title || 'no title'));
           const biome = detectBiome(embed);
           if (biome) {
-            console.log('🎯 Detected biome: ' + biome.type);
+            console.log('   🎯 Detected biome: ' + biome.type);
             await handleBiome(ch, biome.type, biome.badge);
             hasSpecialBiome = true;
           }
@@ -493,6 +515,7 @@ module.exports = (client) => {
       }
 
       // === FALLBACK: Trường hợp khác (không nên xảy ra) ===
+      console.log('⚠️ Unexpected category: ' + getCatName(currentParent));
       if (!d.webhookTimes) d.webhookTimes = [];
       d.webhookTimes.push(now);
       if (!d.first) d.first = now;
