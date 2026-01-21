@@ -17,7 +17,6 @@ const ROLE = ‘1411991634194989096’;
 const REPORT = ‘1438039815919632394’;
 const FILE = path.join(__dirname, ‘../data/streaks.json’);
 const STREAK_CATS = [CAT.ACTIVE, CAT.CYBER, CAT.DREAM, CAT.GLITCH];
-const BIOME_CATS = [CAT.CYBER, CAT.DREAM, CAT.GLITCH];
 const ALL_CATS = Object.values(CAT);
 
 module.exports = (client) => {
@@ -68,22 +67,16 @@ function parseBadges(name) {
 const badges = [];
 const match = name.match(/^(.+?)★】/);
 if (!match) return badges;
-
 const prefix = match[1];
 const withCounter = prefix.match(/x\d+(🌸|🌐|🧩)/g);
-if (withCounter) {
-  withCounter.forEach(b => badges.push(b));
-}
-
-const singleBadges = ['🌸', '🌐', '🧩'];
+if (withCounter) withCounter.forEach(b => badges.push(b));
+const singleBadges = [‘🌸’, ‘🌐’, ‘🧩’];
 singleBadges.forEach(emoji => {
-  if (prefix.includes(emoji) && !badges.some(b => b.includes(emoji))) {
-    badges.push(emoji);
-  }
+if (prefix.includes(emoji) && !badges.some(b => b.includes(emoji))) {
+badges.push(emoji);
+}
 });
-
 return badges;
-
 }
 
 function getUserId(topic) {
@@ -96,13 +89,11 @@ function getData(id, ch = null) {
 if (!data.has(id)) {
 data.set(id, {
 streak: ch ? parseStreak(ch.name) : 0,
-first: null,
-last: null,
+webhookTimes: [],
 days: 0,
 date: null,
 badges: ch ? parseBadges(ch.name) : [],
 moving: false,
-webhookTimes: [],
 firstBiome: null
 });
 }
@@ -128,19 +119,15 @@ return h + ’h ’ + m + ‘m’;
 
 function detectBiome(embed) {
 if (!embed) return null;
-if (embed.title) {
-const t = embed.title.toUpperCase();
+const checkText = (text) => {
+if (!text) return null;
+const t = text.toUpperCase();
 if (t.includes(‘DREAMSPACE’)) return { type: ‘DREAMSPACE’, badge: ‘🌸’ };
 if (t.includes(‘CYBERSPACE’)) return { type: ‘CYBERSPACE’, badge: ‘🌐’ };
 if (t.includes(‘GLITCH’)) return { type: ‘GLITCHED’, badge: ‘🧩’ };
-}
-if (embed.description) {
-const d = embed.description.toUpperCase();
-if (d.includes(‘DREAMSPACE’)) return { type: ‘DREAMSPACE’, badge: ‘🌸’ };
-if (d.includes(‘CYBERSPACE’)) return { type: ‘CYBERSPACE’, badge: ‘🌐’ };
-if (d.includes(‘GLITCH’)) return { type: ‘GLITCHED’, badge: ‘🧩’ };
-}
 return null;
+};
+return checkText(embed.title) || checkText(embed.description);
 }
 
 function getCatName(id) {
@@ -155,17 +142,16 @@ const names = {
 return names[id] || ‘Unknown’;
 }
 
-function calculateActiveTime(webhookTimes) {
-if (!webhookTimes || webhookTimes.length === 0) return 0;
-if (webhookTimes.length === 1) return 0;
-const sorted = […webhookTimes].sort((a, b) => a - b);
+function calculateActiveTime(times) {
+if (!times || times.length < 2) return 0;
+const sorted = […times].sort((a, b) => a - b);
 const MAX_GAP = 10 * 60 * 1000;
-let totalTime = 0;
+let total = 0;
 for (let i = 1; i < sorted.length; i++) {
 const gap = sorted[i] - sorted[i - 1];
-if (gap <= MAX_GAP) totalTime += gap;
+if (gap <= MAX_GAP) total += gap;
 }
-return totalTime;
+return total;
 }
 
 async function updateRole(ch, add) {
@@ -191,204 +177,133 @@ async function handleBiome(ch, type, badge) {
 try {
 const d = getData(ch.id, ch);
 const map = { DREAMSPACE: CAT.DREAM, CYBERSPACE: CAT.CYBER, GLITCHED: CAT.GLITCH };
-const targetCat = map[type];
-if (!targetCat) return;
-
-  const existingIndex = d.badges.findIndex(b => b.includes(badge));
-  
-  if (existingIndex !== -1) {
-    const existing = d.badges[existingIndex];
-    const m = existing.match(/x(\d+)/);
-    const count = m ? parseInt(m[1], 10) : 1;
-    d.badges[existingIndex] = 'x' + (count + 1) + badge;
-    console.log('Badge++: ' + existing + ' → x' + (count + 1) + badge);
-  } else {
-    if (!d.firstBiome) {
-      d.firstBiome = type;
-      d.badges = [badge];
-      d.moving = true;
-      await ch.setParent(targetCat, { lockPermissions: false });
-      await new Promise(r => setTimeout(r, 500));
-      console.log('First biome: ' + type + ', moved to ' + getCatName(targetCat));
-    } else {
-      d.badges.push(badge);
-      console.log('Added badge: ' + badge + ' (staying in ' + getCatName(ch.parentId) + ')');
-    }
-  }
-  
-  await renameChannelByCategory(ch, d.streak, d.badges);
-  await updateRole(ch, true);
-  scheduleSave();
-} catch (e) {
-  console.error('Biome error:', e.message);
+const target = map[type];
+if (!target) return;
+const idx = d.badges.findIndex(b => b.includes(badge));
+if (idx !== -1) {
+const m = d.badges[idx].match(/x(\d+)/);
+const count = m ? parseInt(m[1], 10) : 1;
+d.badges[idx] = ‘x’ + (count + 1) + badge;
+console.log(‘Badge++: x’ + (count + 1) + badge);
+} else {
+if (!d.firstBiome) {
+d.firstBiome = type;
+d.badges = [badge];
+d.moving = true;
+await ch.setParent(target, { lockPermissions: false });
+await new Promise(r => setTimeout(r, 500));
+console.log(’First biome: ’ + type);
+} else {
+d.badges.push(badge);
+console.log(’Added badge: ’ + badge);
 }
-
+}
+await renameChannelByCategory(ch, d.streak, d.badges);
+await updateRole(ch, true);
+scheduleSave();
+} catch (e) {
+console.error(‘Biome error:’, e.message);
+}
 }
 
 async function dailyCheck() {
 try {
-console.log(’=== Daily Check 13:00 VN ===’);
+console.log(‘Daily Check 13:00 VN’);
 const guild = client.guilds.cache.first();
 if (!guild) return;
 const report = await guild.channels.fetch(REPORT).catch(() => null);
 if (!report) return;
-
-  const channels = guild.channels.cache.filter(c => c.type === 0 && STREAK_CATS.includes(c.parentId));
-  const results = { above18h: [], above12h: [], above6h: [] };
-
-  for (const [, ch] of channels) {
-    const d = getData(ch.id, ch);
-    const active = calculateActiveTime(d.webhookTimes);
-    const hours = active / 3600000;
-
-    if (hours >= 18) results.above18h.push({ ch, active, streak: d.streak });
-    if (hours >= 12) results.above12h.push({ ch, active, streak: d.streak });
-    if (hours >= 6) results.above6h.push({ ch, active, streak: d.streak });
-
-    if (hours >= 6) {
-      d.streak++;
-      d.days = 0;
-      await renameChannelByCategory(ch, d.streak, d.badges);
-      console.log('Streak saved: ' + ch.name + ' → ' + d.streak);
-    } else {
-      const old = d.streak;
-      d.days++;
-      if (d.days >= 3) {
-        d.streak = 0;
-        d.badges = [];
-        d.firstBiome = null;
-        d.moving = true;
-        await ch.setParent(CAT.SLEEP, { lockPermissions: false });
-        await new Promise(r => setTimeout(r, 500));
-        await updateRole(ch, false);
-        d.days = 0;
-        await renameChannelByCategory(ch, 0, []);
-        console.log('To Dormant: ' + ch.name + ' (' + formatTime(active) + ')');
-      } else {
-        console.log('Warning: ' + ch.name + ' day ' + d.days + '/3');
-      }
-    }
-    
-    d.webhookTimes = [];
-    d.first = null;
-    d.last = null;
-    d.date = getDate();
-  }
-
-  scheduleSave();
-
-  const embeds = [];
-  const date = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-  const configs = [
-    { key: 'above18h', title: '🏆 18+ Hours', color: 0xFFD700 },
-    { key: 'above12h', title: '⭐ 12+ Hours', color: 0xC0C0C0 },
-    { key: 'above6h', title: '✨ 6+ Hours', color: 0xCD7F32 }
-  ];
-
-  configs.forEach(cfg => {
-    if (results[cfg.key].length > 0) {
-      const desc = results[cfg.key].map(r => '**' + r.ch.name + '** - ' + getCatName(r.ch.parentId) + ' - ' + formatTime(r.active)).join('\n');
-      embeds.push(new EmbedBuilder().setTitle(cfg.title).setColor(cfg.color).setDescription(desc).setTimestamp());
-    }
-  });
-
-  if (embeds.length > 0) {
-    await report.send({ content: '📊 **Daily Report** - ' + date, embeds });
-    console.log('Report sent');
-  } else {
-    await report.send({ content: '📊 **Daily Report** - ' + date + '\nNo 6+ hour channels' });
-  }
-} catch (e) {
-  console.error('Daily error:', e.message);
-} finally {
-  scheduleDailyCheck();
+const channels = guild.channels.cache.filter(c => c.type === 0 && STREAK_CATS.includes(c.parentId));
+const results = { above18h: [], above12h: [], above6h: [] };
+for (const [, ch] of channels) {
+const d = getData(ch.id, ch);
+const active = calculateActiveTime(d.webhookTimes);
+const hours = active / 3600000;
+if (hours >= 18) results.above18h.push({ ch, active });
+if (hours >= 12) results.above12h.push({ ch, active });
+if (hours >= 6) results.above6h.push({ ch, active });
+if (hours >= 6) {
+d.streak++;
+d.days = 0;
+await renameChannelByCategory(ch, d.streak, d.badges);
+console.log(‘Streak saved: ’ + ch.name + ’ = ’ + d.streak);
+} else {
+d.days++;
+if (d.days >= 3) {
+const old = d.streak;
+d.streak = 0;
+d.badges = [];
+d.firstBiome = null;
+d.moving = true;
+await ch.setParent(CAT.SLEEP, { lockPermissions: false });
+await new Promise(r => setTimeout(r, 500));
+await updateRole(ch, false);
+d.days = 0;
+await renameChannelByCategory(ch, 0, []);
+console.log(‘To Dormant: ’ + ch.name + ’ (lost ’ + old + ’ streak)’);
+} else {
+console.log(‘Warning: ’ + ch.name + ’ day ’ + d.days + ‘/3’);
 }
-  
+}
+d.webhookTimes = [];
+d.date = getDate();
+}
+scheduleSave();
+const embeds = [];
+const date = new Date().toLocaleDateString(‘vi-VN’, { timeZone: ‘Asia/Ho_Chi_Minh’ });
+[
+{ key: ‘above18h’, title: ‘🏆 18+ Hours’, color: 0xFFD700 },
+{ key: ‘above12h’, title: ‘⭐ 12+ Hours’, color: 0xC0C0C0 },
+{ key: ‘above6h’, title: ‘✨ 6+ Hours’, color: 0xCD7F32 }
+].forEach(cfg => {
+if (results[cfg.key].length > 0) {
+const desc = results[cfg.key].map(r => ‘**’ + r.ch.name + ’** - ’ + getCatName(r.ch.parentId) + ’ - ’ + formatTime(r.active)).join(’\n’);
+embeds.push(new EmbedBuilder().setTitle(cfg.title).setColor(cfg.color).setDescription(desc).setTimestamp());
+}
+});
+if (embeds.length > 0) {
+await report.send({ content: ’📊 **Daily Report** - ’ + date, embeds });
+} else {
+await report.send({ content: ’📊 **Daily Report** - ’ + date + ‘\nNo 6+ hour channels’ });
+}
+} catch (e) {
+console.error(‘Daily error:’, e.message);
+} finally {
+scheduleDailyCheck();
+}
 }
 
 function scheduleDailyCheck() {
 const next = getNext13H();
-const wait = next - new Date();
 console.log(’Next check: ’ + next.toISOString());
-setTimeout(dailyCheck, wait);
-}
-
-async function scanEmbeds(ch) {
-try {
-const messages = await ch.messages.fetch({ limit: 50 });
-const userId = getUserId(ch.topic);
-if (!userId) return false;
-
-  for (const [, msg] of messages) {
-    if (!msg.webhookId || msg.author.id !== userId) continue;
-    if (!msg.embeds || msg.embeds.length === 0) continue;
-    
-    for (const embed of msg.embeds) {
-      const biome = detectBiome(embed);
-      if (biome) {
-        console.log('Found biome: ' + biome.type + ' in ' + ch.name);
-        await handleBiome(ch, biome.type, biome.badge);
-        return true;
-      }
-    }
-  }
-  return false;
-} catch (e) {
-  console.error('Scan embed error:', e.message);
-  return false;
-}
-
+setTimeout(dailyCheck, next - new Date());
 }
 
 async function scanAll(guild) {
 try {
-console.log(’=== Scanning All Channels ===’);
+console.log(‘Scanning all channels’);
 const channels = guild.channels.cache.filter(c => c.type === 0 && ALL_CATS.includes(c.parentId));
 const today = getDate();
-let count = 0;
-
-  for (const [, ch] of channels) {
-    try {
-      const streak = parseStreak(ch.name);
-      const badges = parseBadges(ch.name);
-      const d = getData(ch.id, ch);
-
-      if (streak !== d.streak && streak >= 0) {
-        d.streak = streak;
-        console.log('Synced streak: ' + ch.name + ' = ' + streak);
-      }
-      
-      if (badges.length > 0) {
-        d.badges = badges;
-        console.log('Synced badges: ' + ch.name + ' = ' + JSON.stringify(badges));
-      }
-      
-      if (d.date !== today) {
-        d.webhookTimes = [];
-        d.first = null;
-        d.last = null;
-      }
-
-      if (STREAK_CATS.includes(ch.parentId)) {
-        await updateRole(ch, true);
-      } else if (ch.parentId === CAT.SLEEP) {
-        await updateRole(ch, false);
-      }
-
-      await scanEmbeds(ch);
-      await renameChannelByCategory(ch, d.streak, d.badges);
-      count++;
-    } catch (e) {
-      console.error('Sync error ' + ch.name + ':', e.message);
-    }
-  }
-
-  scheduleSave();
-  console.log('Synced ' + count + ' channels');
+for (const [, ch] of channels) {
+try {
+const d = getData(ch.id, ch);
+const streak = parseStreak(ch.name);
+const badges = parseBadges(ch.name);
+if (streak !== d.streak && streak >= 0) d.streak = streak;
+if (badges.length > 0) d.badges = badges;
+if (d.date !== today) d.webhookTimes = [];
+if (STREAK_CATS.includes(ch.parentId)) await updateRole(ch, true);
+else if (ch.parentId === CAT.SLEEP) await updateRole(ch, false);
+await renameChannelByCategory(ch, d.streak, d.badges);
 } catch (e) {
-  console.error('Scan error:', e.message);
+console.error(‘Sync error:’, e.message);
 }
-
+}
+scheduleSave();
+console.log(‘Synced ’ + channels.size + ’ channels’);
+} catch (e) {
+console.error(‘Scan error:’, e.message);
+}
 }
 
 client.once(‘ready’, async () => {
@@ -407,196 +322,128 @@ client.on(‘messageCreate’, async (msg) => {
 try {
 if (!msg.webhookId) return;
 const ch = msg.channel;
-if (!ch || !ch.parentId || !ALL_CATS.includes(ch.parentId)) return;
+if (!ch || !ALL_CATS.includes(ch.parentId)) return;
 const userId = getUserId(ch.topic);
 if (!userId || msg.author.id !== userId) return;
-
-  const now = Date.now();
-  const d = getData(ch.id, ch);
-  const currentParent = ch.parentId;
-
-  console.log('Webhook in ' + ch.name + ' (cat: ' + getCatName(currentParent) + ')');
-
-  let biomeDetected = null;
-  
-  if (msg.embeds && msg.embeds.length > 0) {
-    for (const embed of msg.embeds) {
-      const biome = detectBiome(embed);
-      if (biome) {
-        console.log('Biome from EMBED: ' + biome.type);
-        biomeDetected = biome;
-        break;
-      }
-    }
-  }
-  
-  if (!biomeDetected && msg.content) {
-    const contentUpper = msg.content.toUpperCase();
-    if (contentUpper.includes('DREAMSPACE')) {
-      biomeDetected = { type: 'DREAMSPACE', badge: '🌸' };
-    } else if (contentUpper.includes('CYBERSPACE')) {
-      biomeDetected = { type: 'CYBERSPACE', badge: '🌐' };
-    } else if (contentUpper.includes('GLITCH')) {
-      biomeDetected = { type: 'GLITCHED', badge: '🧩' };
-    }
-    if (biomeDetected) {
-      console.log('Biome from TEXT: ' + biomeDetected.type);
-    }
-  }
-
-  if (currentParent === CAT.SLEEP || currentParent === CAT.EMPTY) {
-    const oldStreak = parseStreak(ch.name);
-    d.streak = oldStreak > 0 ? oldStreak : 0;
-    d.webhookTimes = [now];
-    d.first = now;
-    d.last = now;
-    d.days = 0;
-
-    if (biomeDetected) {
-      console.log('Waking up to BIOME category');
-      await handleBiome(ch, biomeDetected.type, biomeDetected.badge);
-    } else {
-      console.log('Waking up to ACTIVE');
-      d.moving = true;
-      await ch.setParent(CAT.ACTIVE, { lockPermissions: false });
-      await new Promise(r => setTimeout(r, 500));
-      await renameChannelByCategory(ch, d.streak, d.badges);
-    }
-
-    await updateRole(ch, true);
-    scheduleSave();
-    return;
-  }
-
-  if (biomeDetected) {
-    await handleBiome(ch, biomeDetected.type, biomeDetected.badge);
-  }
-
-  if (!d.webhookTimes) d.webhookTimes = [];
-  d.webhookTimes.push(now);
-  if (!d.first) d.first = now;
-  d.last = now;
-  scheduleSave();
-
-} catch (e) {
-  console.error('Message error:', e.message);
+const now = Date.now();
+const d = getData(ch.id, ch);
+console.log(’Webhook in ’ + ch.name);
+let biome = null;
+if (msg.embeds && msg.embeds.length > 0) {
+for (const embed of msg.embeds) {
+biome = detectBiome(embed);
+if (biome) break;
 }
-
+}
+if (!biome && msg.content) {
+const t = msg.content.toUpperCase();
+if (t.includes(‘DREAMSPACE’)) biome = { type: ‘DREAMSPACE’, badge: ‘🌸’ };
+else if (t.includes(‘CYBERSPACE’)) biome = { type: ‘CYBERSPACE’, badge: ‘🌐’ };
+else if (t.includes(‘GLITCH’)) biome = { type: ‘GLITCHED’, badge: ‘🧩’ };
+}
+if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
+d.streak = parseStreak(ch.name) || 0;
+d.webhookTimes = [now];
+d.days = 0;
+if (biome) {
+console.log(’Wake to BIOME: ’ + biome.type);
+await handleBiome(ch, biome.type, biome.badge);
+} else {
+console.log(‘Wake to ACTIVE’);
+d.moving = true;
+await ch.setParent(CAT.ACTIVE, { lockPermissions: false });
+await new Promise(r => setTimeout(r, 500));
+await renameChannelByCategory(ch, d.streak, d.badges);
+}
+await updateRole(ch, true);
+scheduleSave();
+return;
+}
+if (biome) await handleBiome(ch, biome.type, biome.badge);
+if (!d.webhookTimes) d.webhookTimes = [];
+d.webhookTimes.push(now);
+scheduleSave();
+} catch (e) {
+console.error(‘Message error:’, e.message);
+}
 });
 
 client.on(‘channelCreate’, async (ch) => {
 try {
 if (ch.type !== 0 || !ALL_CATS.includes(ch.parentId)) return;
 console.log(’Channel created: ’ + ch.name);
-
-  for (let i = 0; i < 5; i++) {
-    await new Promise(r => setTimeout(r, 500));
-    await ch.fetch();
-    if (ch.topic) break;
-  }
-
-  if (!ch.topic) {
-    console.log('No topic yet');
-    return;
-  }
-
-  const d = getData(ch.id, ch);
-  d.streak = 0;
-  d.badges = [];
-  d.webhookTimes = [];
-  d.firstBiome = null;
-
-  await scanEmbeds(ch);
-
-  if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
-    await updateRole(ch, false);
-  } else if (STREAK_CATS.includes(ch.parentId)) {
-    await updateRole(ch, true);
-  }
-
-  await renameChannelByCategory(ch, d.streak, d.badges);
-  scheduleSave();
-} catch (e) {
-  console.error('Create error:', e.message);
+for (let i = 0; i < 5; i++) {
+await new Promise(r => setTimeout(r, 500));
+await ch.fetch();
+if (ch.topic) break;
 }
-
+if (!ch.topic) return;
+const d = getData(ch.id, ch);
+d.streak = 0;
+d.badges = [];
+if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) await updateRole(ch, false);
+else if (STREAK_CATS.includes(ch.parentId)) await updateRole(ch, true);
+await renameChannelByCategory(ch, 0, []);
+scheduleSave();
+} catch (e) {
+console.error(‘Create error:’, e.message);
+}
 });
 
 client.on(‘channelUpdate’, async (old, ch) => {
 try {
 if (!ch || ch.type !== 0) return;
 if (!ALL_CATS.includes(ch.parentId) && !ALL_CATS.includes(old.parentId)) return;
-
-  if (processing.has(ch.id)) return;
-  processing.add(ch.id);
-
-  try {
-    if (old.parentId !== ch.parentId) {
-      console.log('Category change: ' + ch.name);
-      const d = getData(ch.id, ch);
-
-      if (d.moving) {
-        d.moving = false;
-        scheduleSave();
-        console.log('Skip auto-move');
-        return;
-      }
-
-      await new Promise(r => setTimeout(r, 500));
-      await ch.fetch();
-
-      if (!ch.topic) return;
-
-      if (STREAK_CATS.includes(ch.parentId)) {
-        await updateRole(ch, true);
-        d.days = 0;
-        await renameChannelByCategory(ch, d.streak, d.badges);
-      } else if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
-        await updateRole(ch, false);
-        d.streak = 0;
-        d.days = 0;
-        d.webhookTimes = [];
-        d.first = null;
-        d.last = null;
-        d.badges = [];
-        d.firstBiome = null;
-        await renameChannelByCategory(ch, 0, []);
-      }
-
-      await scanEmbeds(ch);
-      scheduleSave();
-    }
-
-    if (old.name !== ch.name) {
-      const newStreak = parseStreak(ch.name);
-      const newBadges = parseBadges(ch.name);
-      const d = getData(ch.id, ch);
-
-      if (newStreak !== d.streak && newStreak >= 0) {
-        d.streak = newStreak;
-        console.log('Name sync streak: ' + newStreak);
-      }
-      if (newBadges.length > 0 && JSON.stringify(newBadges) !== JSON.stringify(d.badges)) {
-        d.badges = newBadges;
-        console.log('Name sync badges: ' + JSON.stringify(newBadges));
-      }
-      scheduleSave();
-    }
-  } finally {
-    processing.delete(ch.id);
-  }
-} catch (e) {
-  console.error('Update error:', e.message);
-  processing.delete(ch.id);
+if (processing.has(ch.id)) return;
+processing.add(ch.id);
+try {
+if (old.parentId !== ch.parentId) {
+console.log(’Category change: ’ + ch.name);
+const d = getData(ch.id, ch);
+if (d.moving) {
+d.moving = false;
+scheduleSave();
+return;
 }
-
+await new Promise(r => setTimeout(r, 500));
+await ch.fetch();
+if (!ch.topic) return;
+if (STREAK_CATS.includes(ch.parentId)) {
+await updateRole(ch, true);
+d.days = 0;
+await renameChannelByCategory(ch, d.streak, d.badges);
+} else if (ch.parentId === CAT.SLEEP || ch.parentId === CAT.EMPTY) {
+await updateRole(ch, false);
+d.streak = 0;
+d.days = 0;
+d.webhookTimes = [];
+d.badges = [];
+d.firstBiome = null;
+await renameChannelByCategory(ch, 0, []);
+}
+scheduleSave();
+}
+if (old.name !== ch.name) {
+const d = getData(ch.id, ch);
+const streak = parseStreak(ch.name);
+const badges = parseBadges(ch.name);
+if (streak !== d.streak && streak >= 0) d.streak = streak;
+if (badges.length > 0) d.badges = badges;
+scheduleSave();
+}
+} finally {
+processing.delete(ch.id);
+}
+} catch (e) {
+console.error(‘Update error:’, e.message);
+processing.delete(ch.id);
+}
 });
 
 client.on(‘channelDelete’, (ch) => {
 if (data.has(ch.id)) {
 data.delete(ch.id);
 scheduleSave();
-console.log(’Deleted: ’ + ch.name);
 }
 });
 };
