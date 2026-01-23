@@ -470,8 +470,10 @@ module.exports = (client) => {
   // ===============================
   async function dailyCheck() {
     try {
+      console.log('═══════════════════════════════════');
       console.log('🔔 DAILY CHECK - 13:00 VN');
       console.log('⏱️ Calculating active time from webhook messages...');
+      console.log('═══════════════════════════════════');
 
       const guild = client.guilds.cache.first();
       if (!guild) return;
@@ -482,54 +484,71 @@ module.exports = (client) => {
         c.type === 0 && STREAK_CATS.includes(c.parentId)
       );
 
+      console.log(`📊 Scanning ${channels.size} channels...`);
+
       const results = { above18h: [], above12h: [], above6h: [] };
 
       for (const [, ch] of channels) {
-        const d = getData(ch.id);
-        
-        // 🔥 FETCH VÀ TÍNH THỜI GIAN TỪ WEBHOOK MESSAGES
-        const active = await fetchAndCalcActiveTime(ch, 200);
-        const hours = active / 3600000;
-        
-        console.log(`⏱️ ${ch.name}: ${formatTime(active)} (${hours.toFixed(2)}h)`);
+        try {
+          const d = getData(ch.id);
+          
+          // 🔥 FETCH VÀ TÍNH THỜI GIAN TỪ WEBHOOK MESSAGES
+          console.log(`\n🔍 Processing: ${ch.name}`);
+          const active = await fetchAndCalcActiveTime(ch, 200);
+          const hours = active / 3600000;
+          
+          console.log(`  ⏱️ Active time: ${formatTime(active)} (${hours.toFixed(2)}h)`);
+          console.log(`  📊 Current streak: ${d.streak}🔥`);
+          console.log(`  ⚠️ Warning days: ${d.days}/3`);
 
-        if (hours >= 18) results.above18h.push({ ch, active });
-        if (hours >= 12) results.above12h.push({ ch, active });
-        if (hours >= 6) results.above6h.push({ ch, active });
+          if (hours >= 18) results.above18h.push({ ch, active });
+          if (hours >= 12) results.above12h.push({ ch, active });
+          if (hours >= 6) results.above6h.push({ ch, active });
 
-        if (hours >= 6) {
-          // ✅ SAVE STREAK
-          d.streak++;
-          d.days = 0;
-          await safeRename(ch, d.streak, d.badges);
-          console.log('✅ Streak saved:', ch.name, '→', d.streak);
-        } else {
-          // ⚠️ WARNING DAY
-          d.days++;
-          if (d.days >= 3) {
-            // 😴 MOVE TO DORMANT
-            const old = d.streak;
-            d.streak = 0;
-            d.badges = [];
-            d.firstBiome = null;
-            d.moving = true;
-            await ch.setParent(CAT.SLEEP, { lockPermissions: false });
-            await new Promise(r => setTimeout(r, 500));
-            await updateRole(ch, false);
-            await safeRename(ch, 0, []);
+          if (hours >= 6) {
+            // ✅ SAVE STREAK
+            d.streak++;
             d.days = 0;
-            console.log('😴 To Dormant:', ch.name, '(lost', old, 'streak)');
+            console.log(`  ✅ STREAK SAVED: ${d.streak - 1}🔥 → ${d.streak}🔥`);
+            await safeRename(ch, d.streak, d.badges);
           } else {
-            console.log('⚠️ Day', d.days, '/3:', ch.name);
+            // ⚠️ WARNING DAY
+            d.days++;
+            console.log(`  ⚠️ WARNING: Day ${d.days}/3 (${hours.toFixed(2)}h < 6h)`);
+            
+            if (d.days >= 3) {
+              // 😴 MOVE TO DORMANT
+              const old = d.streak;
+              d.streak = 0;
+              d.badges = [];
+              d.firstBiome = null;
+              d.moving = true;
+              console.log(`  😴 MOVING TO DORMANT (lost ${old}🔥)`);
+              await ch.setParent(CAT.SLEEP, { lockPermissions: false });
+              await new Promise(r => setTimeout(r, 500));
+              await updateRole(ch, false);
+              await safeRename(ch, 0, []);
+              d.days = 0;
+            }
           }
-        }
 
-        // Reset times array (không còn cần thiết vì fetch trực tiếp)
-        d.times = [];
-        d.date = getDate();
+          // Reset times array
+          d.times = [];
+          d.date = getDate();
+          
+        } catch (err) {
+          console.error(`  ❌ Error processing ${ch.name}:`, err.message);
+        }
       }
 
       scheduleSave();
+
+      console.log('\n═══════════════════════════════════');
+      console.log('📊 DAILY CHECK SUMMARY:');
+      console.log(`  🏆 18+ hours: ${results.above18h.length} channels`);
+      console.log(`  ⭐ 12+ hours: ${results.above12h.length} channels`);
+      console.log(`  ✨ 6+ hours: ${results.above6h.length} channels`);
+      console.log('═══════════════════════════════════');
 
       // 📊 SEND REPORT
       if (report) {
@@ -557,15 +576,18 @@ module.exports = (client) => {
 
         if (embeds.length > 0) {
           await report.send({ content: `📊 **Daily Report** - ${date}`, embeds });
+          console.log('✅ Report sent to channel');
         } else {
           await report.send(`📊 **Daily Report** - ${date}\nNo 6+ hour channels`);
+          console.log('⚠️ No channels reached 6+ hours');
         }
       }
 
-      console.log('✅ Daily check done');
+      console.log('✅ Daily check completed\n');
 
     } catch (e) {
       console.error('❌ Daily check error:', e.message);
+      console.error(e.stack);
     } finally {
       scheduleDailyCheck();
     }
