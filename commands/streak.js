@@ -35,15 +35,17 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      // DEFER NGAY ĐỂ TRÁNH TIMEOUT
+      await interaction.deferReply();
+
       const channel = interaction.channel;
       const action = interaction.options.getString('action');
       const value = interaction.options.getInteger('value');
 
       // Check if channel name ends with -macro
       if (!channel.name.endsWith('-macro')) {
-        return await interaction.reply({
-          content: '❌ Lệnh này chỉ dùng trong channel `-macro`!',
-          ephemeral: true
+        return await interaction.editReply({
+          content: '❌ Lệnh này chỉ dùng trong channel `-macro`!'
         });
       }
 
@@ -54,7 +56,7 @@ module.exports = {
       }
 
       if (!data[channel.id]) {
-        data[channel.id] = { streak: 0, badges: [], times: [], days: 0 };
+        data[channel.id] = { streak: 0, badges: [], times: [], days: 0, date: null, firstBiome: null, moving: false };
       }
 
       const oldStreak = data[channel.id].streak;
@@ -72,9 +74,8 @@ module.exports = {
           break;
         case 'set':
           if (value === null) {
-            return await interaction.reply({
-              content: '❌ Bạn phải chỉ định `value` khi dùng action `set`!',
-              ephemeral: true
+            return await interaction.editReply({
+              content: '❌ Bạn phải chỉ định `value` khi dùng action `set`!'
             });
           }
           newStreak = value;
@@ -88,9 +89,6 @@ module.exports = {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
-      // Rename channel (optional - requires rename function)
-      // await safeRename(channel, newStreak, data[channel.id].badges);
-
       const embed = new EmbedBuilder()
         .setTitle('✅ Streak Updated')
         .setDescription(`**Channel:** ${channel.name}`)
@@ -102,14 +100,16 @@ module.exports = {
         .setColor(0x00FF00)
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
       console.error('Streak error:', error);
-      await interaction.reply({
-        content: '❌ Lỗi: ' + error.message,
-        ephemeral: true
-      });
+      const reply = { content: '❌ Lỗi: ' + error.message };
+      if (interaction.deferred) {
+        await interaction.editReply(reply);
+      } else {
+        await interaction.reply(reply);
+      }
     }
   }
 };
