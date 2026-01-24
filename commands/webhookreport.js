@@ -1,16 +1,11 @@
 // ============================================
-// FILE 3: commands/webhookreport.js
+// FILE: commands/webhookreport.js - UPDATED
+// Sử dụng helper functions
 // ============================================
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-
-const REPORT_CHANNEL = '1438039815919632394';
-const STREAK_CATS = [
-  '1411034825699233943', // Active
-  '1446077580615880735', // Cyberspace
-  '1445997821336748155', // Dreamspace
-  '1445997659948060712'  // Glitch
-];
+const { fetchAndCalculateTime, formatTime, categorizeByTime } = require('../functions/timeCalculator');
+const { getMacroChannels, getCategoryName } = require('../functions/channelUtils');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -19,9 +14,9 @@ module.exports = {
     .addIntegerOption(option =>
       option
         .setName('limit')
-        .setDescription('Số messages fetch (mặc định 100)')
+        .setDescription('Số messages fetch (mặc định 100, MAX 100)')
         .setMinValue(10)
-        .setMaxValue(500)
+        .setMaxValue(100)
         .setRequired(false)
     ),
 
@@ -32,37 +27,41 @@ module.exports = {
       const limit = interaction.options.getInteger('limit') || 100;
       const guild = interaction.guild;
 
-      const channels = guild.channels.cache.filter(c =>
-        c.type === 0 && STREAK_CATS.includes(c.parentId)
-      );
-
-      const results = { above18h: [], above12h: [], above6h: [] };
-
+      // Get all macro channels
+      const channels = getMacroChannels(guild);
+      
       await interaction.editReply(`🔍 Đang quét ${channels.size} channels...`);
 
+      const channelDataMap = new Map();
+
+      // Scan all channels
       for (const [, ch] of channels) {
-        try {
-          const messages = await ch.messages.fetch({ limit });
-          const webhookMessages = messages.filter(m => m.webhookId);
-          
-          if (webhookMessages.size === 0) continue;
-
-          const times = webhookMessages.map(m => m.createdTimestamp).sort((a, b) => a - b);
-          const active = calcActive(times);
-          const hours = active / 3600000;
-
-          if (hours >= 18) results.above18h.push({ ch, active });
-          if (hours >= 12) results.above12h.push({ ch, active });
-          if (hours >= 6) results.above6h.push({ ch, active });
-
-        } catch (err) {
-          console.error('Error scanning', ch.name, err.message);
+        console.log(`🔍 Scanning ${ch.name}...`);
+        
+        const result = await fetchAndCalculateTime(ch, limit);
+        
+        if (result.error) {
+          console.error(`❌ Error scanning ${ch.name}:`, result.error);
+          continue;
+        }
+        
+        console.log(`  📊 ${result.webhookCount} webhooks, ${formatTime(result.activeTime)}`);
+        
+        if (result.activeTime > 0) {
+          channelDataMap.set(ch, {
+            activeTime: result.activeTime,
+            webhookCount: result.webhookCount
+          });
         }
       }
 
+      // Categorize results
+      const results = categorizeByTime(channelDataMap);
+      
       const embeds = [];
       const date = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 
+      // Create embeds for each tier
       [
         { key: 'above18h', title: '🏆 18+ Hours', color: 0xFFD700 },
         { key: 'above12h', title: '⭐ 12+ Hours', color: 0xC0C0C0 },
@@ -70,8 +69,9 @@ module.exports = {
       ].forEach(cfg => {
         if (results[cfg.key].length > 0) {
           const desc = results[cfg.key]
-            .map(r => `**${r.ch.name}** - ${formatTime(r.active)}`)
+            .map(r => `**${r.channel.name}** - ${getCategoryName(r.channel.parentId)} - ${formatTime(r.activeTime)} (${r.webhookCount} msgs)`)
             .join('\n');
+          
           embeds.push(
             new EmbedBuilder()
               .setTitle(cfg.title)
@@ -82,34 +82,23 @@ module.exports = {
         }
       });
 
+      // Send result
       if (embeds.length > 0) {
-        await interaction.editReply({ 
-          content: `📊 **Webhook Report** - ${date}`, 
-          embeds 
-        });
+        const summary = `📊 **Webhook Report** - ${date}\n\n**Summary:**\n🏆 18+ hours: ${results.above18h.length}\n⭐ 12+ hours: ${results.above12h.length}\n✨ 6+ hours: ${results.above6h.length}\n\n**Scanned:** ${channels.size} channels`;
+        
+        await interaction.editReply({ content: summary, embeds });
       } else {
-        await interaction.editReply(`📊 **Webhook Report** - ${date}\nKhông có channel nào đạt 6+ giờ`);
+        await interaction.editReply(`📊 **Webhook Report** - ${date}\n\n❌ Không có channel nào đạt 6+ giờ\n\n**Đã quét:** ${channels.size} channels`);
       }
 
     } catch (error) {
-      console.error('Report error:', error);
-      await interaction.editReply('❌ Lỗi: ' + error.message);
+      console.error('❌ Report error:', error);
+      const reply = '❌ Lỗi: ' + error.message;
+      if (interaction.deferred) {
+        await interaction.editReply(reply);
+      } else {
+        await interaction.reply(reply);
+      }
     }
   }
 };
-
-function calcActive(times, maxGap = 10 * 60 * 1000) {
-  if (!times || times.length < 2) return 0;
-  let total = 0;
-  for (let i = 1; i < times.length; i++) {
-    const gap = times[i] - times[i - 1];
-    if (gap <= maxGap) total += gap;
-  }
-  return total;
-}
-
-function formatTime(ms) {
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  return `${h}h ${m}m`;
-}
