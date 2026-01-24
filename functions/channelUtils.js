@@ -1,5 +1,5 @@
 // ============================================
-// FILE 2: functions/channelUtils.js
+// FILE: functions/channelUtils.js
 // Helper functions cho channel operations
 // ============================================
 
