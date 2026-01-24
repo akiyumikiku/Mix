@@ -1,20 +1,26 @@
 // ============================================
-// FILE: commands/webhookreport.js - UPDATED
+// FILE: commands/checkChannelTime.js - UPDATED
 // Sử dụng helper functions
 // ============================================
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { fetchAndCalculateTime, formatTime, categorizeByTime } = require('../functions/timeCalculator');
-const { getMacroChannels, getCategoryName } = require('../functions/channelUtils');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { fetchAndCalculateTime, formatTime, msToHours } = require('../functions/timeCalculator');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('webhookreport')
-    .setDescription('Gửi báo cáo webhook ngay tại kênh này')
+    .setName('check_channel_time')
+    .setDescription('Kiểm tra thời gian macro của một channel')
+    .addChannelOption(option =>
+      option
+        .setName('channel')
+        .setDescription('Channel cần kiểm tra (chỉ text channel)')
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true)
+    )
     .addIntegerOption(option =>
       option
         .setName('limit')
-        .setDescription('Số messages fetch (mặc định 100, MAX 100)')
+        .setDescription('Số lượng messages tối đa để fetch (mặc định: 100)')
         .setMinValue(10)
         .setMaxValue(100)
         .setRequired(false)
@@ -24,81 +30,101 @@ module.exports = {
     try {
       await interaction.deferReply();
 
+      const channel = interaction.options.getChannel('channel');
       const limit = interaction.options.getInteger('limit') || 100;
-      const guild = interaction.guild;
 
-      // Get all macro channels
-      const channels = getMacroChannels(guild);
-      
-      await interaction.editReply(`🔍 Đang quét ${channels.size} channels...`);
-
-      const channelDataMap = new Map();
-
-      // Scan all channels
-      for (const [, ch] of channels) {
-        console.log(`🔍 Scanning ${ch.name}...`);
-        
-        const result = await fetchAndCalculateTime(ch, limit);
-        
-        if (result.error) {
-          console.error(`❌ Error scanning ${ch.name}:`, result.error);
-          continue;
-        }
-        
-        console.log(`  📊 ${result.webhookCount} webhooks, ${formatTime(result.activeTime)}`);
-        
-        if (result.activeTime > 0) {
-          channelDataMap.set(ch, {
-            activeTime: result.activeTime,
-            webhookCount: result.webhookCount
-          });
-        }
+      if (!channel.name.endsWith('-macro')) {
+        return await interaction.editReply({
+          content: '❌ Channel phải có đuôi `-macro`!',
+          ephemeral: true
+        });
       }
 
-      // Categorize results
-      const results = categorizeByTime(channelDataMap);
+      await interaction.editReply(`🔍 Đang fetch ${limit} messages từ ${channel.name}...`);
       
-      const embeds = [];
-      const date = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      // Use helper function
+      const result = await fetchAndCalculateTime(channel, limit);
 
-      // Create embeds for each tier
-      [
-        { key: 'above18h', title: '🏆 18+ Hours', color: 0xFFD700 },
-        { key: 'above12h', title: '⭐ 12+ Hours', color: 0xC0C0C0 },
-        { key: 'above6h', title: '✨ 6+ Hours', color: 0xCD7F32 }
-      ].forEach(cfg => {
-        if (results[cfg.key].length > 0) {
-          const desc = results[cfg.key]
-            .map(r => `**${r.channel.name}** - ${getCategoryName(r.channel.parentId)} - ${formatTime(r.activeTime)} (${r.webhookCount} msgs)`)
-            .join('\n');
-          
-          embeds.push(
-            new EmbedBuilder()
-              .setTitle(cfg.title)
-              .setColor(cfg.color)
-              .setDescription(desc)
-              .setTimestamp()
-          );
-        }
-      });
-
-      // Send result
-      if (embeds.length > 0) {
-        const summary = `📊 **Webhook Report** - ${date}\n\n**Summary:**\n🏆 18+ hours: ${results.above18h.length}\n⭐ 12+ hours: ${results.above12h.length}\n✨ 6+ hours: ${results.above6h.length}\n\n**Scanned:** ${channels.size} channels`;
-        
-        await interaction.editReply({ content: summary, embeds });
-      } else {
-        await interaction.editReply(`📊 **Webhook Report** - ${date}\n\n❌ Không có channel nào đạt 6+ giờ\n\n**Đã quét:** ${channels.size} channels`);
+      if (result.error) {
+        return await interaction.editReply({
+          content: `❌ Lỗi: ${result.error}`,
+          ephemeral: true
+        });
       }
+
+      if (result.webhookCount === 0) {
+        return await interaction.editReply({
+          content: `❌ Không tìm thấy webhook messages nào trong ${channel.name}`,
+          ephemeral: true
+        });
+      }
+
+      const hours = msToHours(result.activeTime);
+      const minutes = (result.activeTime % 3600000) / 60000;
+
+      // Calculate additional stats
+      const times = result.messages.map(m => m.createdTimestamp).sort((a, b) => a - b);
+      const oldest = times[0];
+      const newest = times[times.length - 1];
+      const totalSpan = newest - oldest;
+      const spanHours = totalSpan / 3600000;
+
+      // Calculate sessions
+      let sessions = 1;
+      let longestSession = 0;
+      let currentSession = 0;
+      const MAX_GAP = 10 * 60 * 1000;
+
+      for (let i = 1; i < times.length; i++) {
+        const gap = times[i] - times[i - 1];
+        if (gap > MAX_GAP) {
+          sessions++;
+          longestSession = Math.max(longestSession, currentSession);
+          currentSession = 0;
+        } else {
+          currentSession += gap;
+        }
+      }
+      longestSession = Math.max(longestSession, currentSession);
+
+      const oldestDate = new Date(oldest).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      const newestDate = new Date(newest).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+      const embed = new EmbedBuilder()
+        .setTitle('⏱️ BÁO CÁO THỜI GIAN MACRO')
+        .setDescription(`**Channel:** ${channel.name}`)
+        .setColor(hours >= 6 ? 0x00FF00 : 0xFF0000)
+        .addFields(
+          { name: '📨 Webhook Messages', value: `${result.webhookCount} messages`, inline: true },
+          { name: '📊 Messages Fetched', value: `${limit} messages`, inline: true },
+          { name: '\u200B', value: '\u200B', inline: true },
+          {
+            name: '⏰ Thời Gian Macro Thực Tế',
+            value: `**${Math.floor(hours)}h ${Math.floor(minutes)}m** (${hours.toFixed(2)}h)`,
+            inline: false
+          },
+          { name: '📏 Khoảng Thời Gian', value: `${spanHours.toFixed(2)}h`, inline: true },
+          { name: '🔢 Số Sessions', value: `${sessions} sessions`, inline: true },
+          { name: '⚡ Longest Session', value: formatTime(longestSession), inline: true },
+          { name: '🕐 Message Đầu', value: oldestDate, inline: false },
+          { name: '🕙 Message Cuối', value: newestDate, inline: false },
+          {
+            name: '✅ Đủ Streak?',
+            value: hours >= 6 ? '✅ CÓ (≥6h)' : `❌ KHÔNG (${hours.toFixed(2)}h < 6h)`,
+            inline: false
+          }
+        )
+        .setFooter({ text: 'Gap > 10 phút = nghỉ (break)' })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      console.error('❌ Report error:', error);
-      const reply = '❌ Lỗi: ' + error.message;
-      if (interaction.deferred) {
-        await interaction.editReply(reply);
-      } else {
-        await interaction.reply(reply);
-      }
+      console.error('Error:', error);
+      await interaction.editReply({
+        content: '❌ Lỗi: ' + error.message,
+        ephemeral: true
+      });
     }
   }
 };
