@@ -22,6 +22,13 @@ const ALLOWED_CHANNELS = [
   "1445395166666952714"
 ];
 
+/* ================== CACHE TRACKING ================== */
+let lastCounterUpdate = {
+  all: 0,
+  members: 0,
+  timestamp: 0
+};
+
 /* ================== UTILS ================== */
 async function getChannel(guild, id) {
   try {
@@ -86,13 +93,37 @@ async function applyUserPermissions(member) {
   }
 }
 
-/* ================== COUNTER ================== */
+/* ================== COUNTER (WITH RATE LIMIT & CACHE) ================== */
 async function updateCounters(client, online = true) {
   try {
+    // ✅ Kiểm tra rate limit (10 phút giữa mỗi lần update)
+    const now = Date.now();
+    if (now - lastCounterUpdate.timestamp < 10 * 60 * 1000 && lastCounterUpdate.timestamp > 0) {
+      console.log("⏰ Rate limited - skipping counter update");
+      return;
+    }
+
     console.log("🔄 Updating counters...");
     
     const guild = await client.guilds.fetch(process.env.GUILD_ID);
-    const members = await guild.members.fetch();
+    
+    // ✅ FORCE FETCH - lấy dữ liệu mới từ Discord
+    await guild.members.fetch({ force: true });
+    
+    const totalMembers = guild.members.cache.filter(m => !m.user.bot).size;
+    const allMembers = guild.memberCount;
+
+    // ✅ Chỉ update nếu số liệu thay đổi
+    if (
+      lastCounterUpdate.all === allMembers && 
+      lastCounterUpdate.members === totalMembers &&
+      lastCounterUpdate.timestamp > 0
+    ) {
+      console.log("📊 No changes detected - skipping update");
+      return;
+    }
+
+    console.log(`📊 Stats changed: All=${allMembers} (was ${lastCounterUpdate.all}), Members=${totalMembers} (was ${lastCounterUpdate.members})`);
 
     const chAll = await guild.channels.fetch(process.env.CH_ALL).catch(() => null);
     const chMem = await guild.channels.fetch(process.env.CH_MEMBERS).catch(() => null);
@@ -104,12 +135,19 @@ async function updateCounters(client, online = true) {
     }
 
     await Promise.allSettled([
-      chAll.setName(`╭ All Members: ${guild.memberCount}`),
-      chMem.setName(`┊ Members: ${members.filter(m => !m.user.bot).size}`),
+      chAll.setName(`╭ All Members: ${allMembers}`),
+      chMem.setName(`┊ Members: ${totalMembers}`),
       chSrv.setName(`╰ Server: ${online ? "🟢 Active" : "🔴 Offline"}`)
     ]);
     
-    console.log("✅ Counters updated!");
+    // ✅ Lưu cache
+    lastCounterUpdate = {
+      all: allMembers,
+      members: totalMembers,
+      timestamp: now
+    };
+    
+    console.log(`✅ Counters updated! All=${allMembers}, Members=${totalMembers}`);
   } catch (err) {
     console.error("❌ Update counters error:", err);
   }
@@ -129,10 +167,6 @@ function initPermissionSystem(client) {
   }
 
   console.log("✅ Environment variables OK");
-  console.log(`   ├─ GUILD_ID: ${process.env.GUILD_ID}`);
-  console.log(`   ├─ CH_ALL: ${process.env.CH_ALL}`);
-  console.log(`   ├─ CH_MEMBERS: ${process.env.CH_MEMBERS}`);
-  console.log(`   └─ CH_SERVER: ${process.env.CH_SERVER}`);
 
   // ✅ Event: Member mới join
   client.on("guildMemberAdd", async (member) => {
@@ -140,6 +174,15 @@ function initPermissionSystem(client) {
       console.log(`👋 New member joined: ${member.user.tag}`);
       await applyUserPermissions(member);
     }
+    // Update counter khi có member mới
+    await updateCounters(client, true);
+  });
+
+  // ✅ Event: Member leave
+  client.on("guildMemberRemove", async (member) => {
+    console.log(`👋 Member left: ${member.user.tag}`);
+    // Update counter khi member rời
+    await updateCounters(client, true);
   });
 
   // ✅ Event: Member update roles
@@ -150,7 +193,7 @@ function initPermissionSystem(client) {
     }
   });
 
-  // ✅ Event: Bot ready - apply permissions cho tất cả members
+  // ✅ Event: Bot ready
   client.once("ready", async () => {
     try {
       console.log("🔄 Bot ready - Starting permission system setup...");
@@ -164,7 +207,7 @@ function initPermissionSystem(client) {
 
       console.log(`✅ Guild found: ${guild.name}`);
       
-      await guild.members.fetch();
+      await guild.members.fetch({ force: true });
       console.log(`✅ Fetched ${guild.members.cache.size} members`);
       
       console.log("🔄 Đang apply permissions cho tất cả members...");
@@ -179,22 +222,24 @@ function initPermissionSystem(client) {
 
       console.log(`✅ Permissions applied cho ${count} members!`);
 
-      // ✅ Update counters lần đầu
+      // ✅ Update counters lần đầu (force)
+      lastCounterUpdate.timestamp = 0; // Reset để force update
       await updateCounters(client, true);
 
-      // ✅ Auto update counters mỗi 5 phút
-      setInterval(() => updateCounters(client, true), 5 * 60 * 1000);
-      console.log("⏰ Counter auto-update scheduled (every 5 minutes)");
+      // ✅ Auto update counters mỗi 15 phút (tránh rate limit)
+      setInterval(() => updateCounters(client, true), 15 * 60 * 1000);
+      console.log("⏰ Counter auto-update scheduled (every 15 minutes)");
       
     } catch (err) {
       console.error("❌ Init permission system error:", err.stack || err);
     }
   });
 
-  // ✅ Graceful shutdown - update counter về offline
+  // ✅ Graceful shutdown
   const shutdownHandler = async () => {
     console.log("🔴 Bot đang tắt...");
     try {
+      lastCounterUpdate.timestamp = 0; // Force update
       await updateCounters(client, false);
       console.log("✅ Counters updated to offline");
     } catch (err) {
