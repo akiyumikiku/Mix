@@ -126,7 +126,7 @@ client.once("ready", async () => {
 
 
 // ===============================
-// 🌐 KEEP ALIVE
+// 🌐 KEEP ALIVE (CHỈ 1 LẦN DUY NHẤT)
 // ===============================
 const app = express();
 app.get("/", (_, res) => res.send("Bot online ✅"));
