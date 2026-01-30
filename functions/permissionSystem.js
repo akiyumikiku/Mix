@@ -1,17 +1,3 @@
-const express = require("express");
-
-/* ================== KEEP ALIVE ================== */
-function startKeepAlive() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
-
-  app.get("/", (_, res) => res.send("✅ Bot đang hoạt động"));
-
-  return app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Keep-alive listening on ${PORT}`);
-  });
-}
-
 /* ================== CONFIG ================== */
 const SPECIAL_ROLES = [
   "1426522399645634691",
@@ -85,35 +71,63 @@ async function updateCounters(client, online = true) {
       chMem.setName(`┊ Members: ${members.filter(m => !m.user.bot).size}`),
       chSrv.setName(`╰ Server: ${online ? "🟢 Active" : "🔴 Offline"}`)
     ]);
-  } catch {}
+  } catch (err) {
+    console.error("❌ Update counters error:", err);
+  }
 }
 
 /* ================== INIT ================== */
 function initPermissionSystem(client) {
-  const server = startKeepAlive();
+  // ✅ Event: Member mới join
+  client.on("guildMemberAdd", m => {
+    if (!m.user.bot) applyUserPermissions(m);
+  });
 
-  client.on("guildMemberAdd", m => !m.user.bot && applyUserPermissions(m));
+  // ✅ Event: Member update roles
   client.on("guildMemberUpdate", (o, n) => {
     if (!n.user.bot && !o.roles.cache.equals(n.roles.cache)) {
       applyUserPermissions(n);
     }
   });
 
+  // ✅ Event: Bot ready - apply permissions cho tất cả members
   client.once("ready", async () => {
-    const guild = await client.guilds.fetch(process.env.GUILD_ID);
-    await guild.members.fetch();
+    try {
+      const guild = await client.guilds.fetch(process.env.GUILD_ID);
+      await guild.members.fetch();
 
-    for (const [, member] of guild.members.cache) {
-      if (!member.user.bot) await applyUserPermissions(member);
+      console.log("🔄 Đang apply permissions cho tất cả members...");
+      
+      for (const [, member] of guild.members.cache) {
+        if (!member.user.bot) {
+          await applyUserPermissions(member);
+        }
+      }
+
+      console.log("✅ Permissions applied xong!");
+
+      // ✅ Update counters lần đầu
+      await updateCounters(client, true);
+
+      // ✅ Auto update counters mỗi 5 phút
+      setInterval(() => updateCounters(client, true), 5 * 60 * 1000);
+      
+    } catch (err) {
+      console.error("❌ Init permission system error:", err);
     }
-
-    await updateCounters(client, true);
-    setInterval(() => updateCounters(client, true), 5 * 60 * 1000);
   });
 
+  // ✅ Graceful shutdown - update counter về offline
   process.on("SIGINT", async () => {
+    console.log("🔴 Bot đang tắt...");
     await updateCounters(client, false);
-    server.close(() => process.exit(0));
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", async () => {
+    console.log("🔴 Bot đang tắt...");
+    await updateCounters(client, false);
+    process.exit(0);
   });
 }
 
