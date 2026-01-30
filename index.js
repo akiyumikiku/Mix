@@ -109,15 +109,25 @@ client.once("ready", async () => {
   console.log(`✅ Bot đăng nhập: ${client.user.tag}`);
 
   // 1️⃣ Init permission / counter system
-  if (typeof initPermissionSystem === "function") {
-    initPermissionSystem(client);
-    console.log("🔐 Permission system initialized");
+  try {
+    if (typeof initPermissionSystem === "function") {
+      initPermissionSystem(client);
+      console.log("🔐 Permission system initialized");
+    } else {
+      console.warn("⚠️ initPermissionSystem không phải function");
+    }
+  } catch (err) {
+    console.error("❌ Permission system error:", err.stack || err);
   }
 
   // 2️⃣ Init auto role updater (nếu có)
-  if (typeof initRoleUpdater === "function") {
-    await initRoleUpdater(client);
-    console.log("🔄 Role updater initialized");
+  try {
+    if (typeof initRoleUpdater === "function") {
+      await initRoleUpdater(client);
+      console.log("🔄 Role updater initialized");
+    }
+  } catch (err) {
+    console.error("❌ Role updater error:", err.stack || err);
   }
 
   // 3️⃣ Custom event cho module khác (nếu cần)
@@ -178,4 +188,7 @@ if (!process.env.TOKEN) {
   process.exit(1);
 }
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN).catch(err => {
+  console.error("❌ Login failed:", err);
+  process.exit(1);
+});
