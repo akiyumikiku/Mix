@@ -1,6 +1,6 @@
 // ============================================
-// FILE: events/channelHandler.js - FULLY FIXED VERSION v2.2
-// Fixed: Proper biome detection, webhook scanning, accurate counting
+// FILE: events/channelHandler.js - FULLY FIXED VERSION v2.3
+// Fixed: Timezone VN, proper time calculation, enhanced debugging
 // ============================================
 
 const { EmbedBuilder } = require('discord.js');
@@ -110,8 +110,15 @@ module.exports = (client) => {
     return data.get(id);
   }
 
+  // ✅ FIX: Dùng timezone VN thay vì UTC
   function getDate() {
-    return new Date().toISOString().split('T')[0];
+    const vn = new Date().toLocaleString('en-CA', { 
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit'
+    }).split(',')[0];
+    return vn; // Format: YYYY-MM-DD
   }
 
   function getNext13H() {
@@ -515,10 +522,12 @@ module.exports = (client) => {
       const d = getData(ch.id);
       const today = getDate();
 
+      // ✅ FIX: Chỉ reset nếu ngày thực sự khác (VN timezone)
       if (d.date !== today) {
+        console.log(`  📅 Day changed: ${d.date} → ${today}`);
+        console.log(`  🗑️ Clearing ${d.times?.length || 0} old timestamps`);
         d.times = [];
         d.date = today;
-        console.log('  📅 New day detected, reset times');
       }
 
       const biomeKey = detectBiomeFromMessage(msg);
@@ -613,6 +622,14 @@ module.exports = (client) => {
           console.log(`\n🔍 Processing: ${ch.name}`);
           console.log(`  📊 Saved timestamps: ${d.times?.length || 0}`);
           console.log(`  🎨 Current badges:`, d.badges);
+          
+          // ✅ ENHANCED DEBUG LOGS
+          if (d.times && d.times.length > 0) {
+            const sorted = [...d.times].sort((a, b) => a - b);
+            console.log(`  🕐 First webhook: ${new Date(sorted[0]).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+            console.log(`  🕐 Last webhook: ${new Date(sorted[sorted.length - 1]).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`);
+            console.log(`  📋 Sample timestamps:`, sorted.slice(0, 5).map(t => new Date(t).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })));
+          }
           
           if (!d.times || !Array.isArray(d.times) || d.times.length === 0) {
             console.log(`  ⚠️ No timestamps saved today → 0 hours`);
@@ -972,7 +989,7 @@ module.exports = (client) => {
             { name: '✅ Streak Status', value: hours >= 6 ? '✅ Will save' : `⚠️ Need ${(6 - hours).toFixed(1)}h more`, inline: true },
             { name: '⚙️ Settings', value: `Max gap: ${formatTime(MAX_GAP)}`, inline: false }
           )
-          .setFooter({ text: 'v2.2 - Smart biome detection' })
+          .setFooter({ text: 'v2.3 - Fixed timezone + enhanced debug' })
           .setTimestamp();
 
         if (d.times && d.times.length > 0) {
@@ -1122,7 +1139,7 @@ module.exports = (client) => {
           value: `• Max gap: ${formatTime(MAX_GAP)}\n• Daily check: 13:00 VN\n• Min streak: 6h\n• Biome detection: Smart scan`,
           inline: false
         })
-        .setFooter({ text: 'Macro Tracker Bot v2.2' })
+        .setFooter({ text: 'Macro Tracker Bot v2.3' })
         .setTimestamp();
       
       await msg.reply({ embeds: [helpEmbed] });
