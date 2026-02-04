@@ -613,7 +613,7 @@ module.exports = (client) => {
 
       console.log(`📊 Scanning ${channels.size} channels...`);
 
-      const results = { above18h: [], above12h: [], above6h: [] };
+      const results = { above23h: [], above18h: [], above12h: [], above6h: [] };
 
       for (const [, ch] of channels) {
         try {
@@ -663,9 +663,16 @@ module.exports = (client) => {
           console.log(`  📊 Current streak: ${d.streak}🔥`);
           console.log(`  ⚠️ Warning days: ${d.days}/3`);
 
-          if (hours >= 18) results.above18h.push({ ch, active });
-          if (hours >= 12) results.above12h.push({ ch, active });
-          if (hours >= 6) results.above6h.push({ ch, active });
+          // ✅ FIX: 4 tiers như ảnh - mỗi channel chỉ vào tier cao nhất
+          if (hours >= 23) {
+            results.above23h.push({ ch, active });
+          } else if (hours >= 18) {
+            results.above18h.push({ ch, active });
+          } else if (hours >= 12) {
+            results.above12h.push({ ch, active });
+          } else if (hours >= 6) {
+            results.above6h.push({ ch, active });
+          }
 
           if (hours >= 6) {
             d.streak++;
@@ -706,39 +713,40 @@ module.exports = (client) => {
 
       console.log('\n═══════════════════════════════════');
       console.log('📊 DAILY CHECK SUMMARY:');
-      console.log(`  🏆 18+ hours: ${results.above18h.length} channels`);
-      console.log(`  ⭐ 12+ hours: ${results.above12h.length} channels`);
-      console.log(`  ✨ 6+ hours: ${results.above6h.length} channels`);
+      console.log(`  🔴 23+ hours: ${results.above23h.length} channels`);
+      console.log(`  🟠 18+ hours: ${results.above18h.length} channels`);
+      console.log(`  🟡 12+ hours: ${results.above12h.length} channels`);
+      console.log(`  🔵 6+ hours: ${results.above6h.length} channels`);
       console.log('═══════════════════════════════════');
 
       if (report) {
-        const date = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
         const embeds = [];
 
+        // ✅ 4 TIERS giống hệt ảnh với màu đúng
         [
-          { key: 'above18h', title: '🏆 18+ Hours', color: 0xFFD700 },
-          { key: 'above12h', title: '⭐ 12+ Hours', color: 0xC0C0C0 },
-          { key: 'above6h', title: '✨ 6+ Hours', color: 0xCD7F32 }
+          { key: 'above23h', title: '23h+ Channels', color: 0xED4245 },  // Đỏ Discord
+          { key: 'above18h', title: '18h+ Channels', color: 0xF26522 },  // Cam
+          { key: 'above12h', title: '12h+ Channels', color: 0xFEE75C },  // Vàng
+          { key: 'above6h', title: '6h+ Channels', color: 0x57F287 }     // Xanh lá
         ].forEach(cfg => {
           if (results[cfg.key].length > 0) {
             const desc = results[cfg.key]
-              .map(r => `**${r.ch.name}** - ${getCatName(r.ch.parentId)} - ${formatTime(r.active)}`)
+              .map(r => `<#${r.ch.id}> - ${formatTime(r.active)}`)
               .join('\n');
             embeds.push(
               new EmbedBuilder()
                 .setTitle(cfg.title)
                 .setColor(cfg.color)
                 .setDescription(desc)
-                .setTimestamp()
             );
           }
         });
 
         if (embeds.length > 0) {
-          await report.send({ content: `📊 **Daily Report** - ${date}`, embeds });
+          await report.send({ embeds });
           console.log('✅ Report sent to channel');
         } else {
-          await report.send(`📊 **Daily Report** - ${date}\n⚠️ No channels reached 6+ hours`);
+          await report.send(`⚠️ No channels reached 6+ hours`);
           console.log('⚠️ No channels reached 6+ hours');
         }
       }
