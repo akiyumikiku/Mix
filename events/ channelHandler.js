@@ -102,7 +102,7 @@ module.exports = (client) => {
         badges: [],
         times: [],
         days: 0,
-        date: null,
+        date: getDate(), // Đặt ngày hiện tại khi khởi tạo
         firstBiome: null,
         moving: false
       });
@@ -520,15 +520,8 @@ module.exports = (client) => {
 
       const now = Date.now();
       const d = getData(ch.id);
-      const today = getDate();
 
-      // ✅ FIX: Chỉ reset nếu ngày thực sự khác (VN timezone)
-      if (d.date !== today) {
-        console.log(`  📅 Day changed: ${d.date} → ${today}`);
-        console.log(`  🗑️ Clearing ${d.times?.length || 0} old timestamps`);
-        d.times = [];
-        d.date = today;
-      }
+      // ❌ REMOVED: Không reset lúc 00:00 nữa, chỉ reset sau daily check (13:00)
 
       const biomeKey = detectBiomeFromMessage(msg);
       if (biomeKey) {
@@ -540,8 +533,9 @@ module.exports = (client) => {
         console.log('⏰ WAKING UP from', getCatName(ch.parentId));
         
         d.streak = parseStreak(ch.name) || 0;
-        d.times = [now];
+        d.times = [now]; // Khởi tạo mảng timestamps mới
         d.days = 0;
+        d.date = getDate(); // Đánh dấu ngày bắt đầu
 
         // ✅ SCAN ALL RECENT WEBHOOKS
         console.log('📊 Scanning all recent webhooks...');
@@ -700,6 +694,8 @@ module.exports = (client) => {
             }
           }
 
+          // ✅ RESET timestamps SAU KHI daily check xong (13:00)
+          console.log(`  🔄 Resetting timestamps for next 24h cycle`);
           d.times = [];
           d.date = getDate();
           
@@ -897,8 +893,6 @@ module.exports = (client) => {
         c.type === 0 && ALL_CATS.includes(c.parentId)
       );
       
-      const today = getDate();
-      
       for (const [, ch] of channels) {
         try {
           const d = getData(ch.id);
@@ -911,7 +905,8 @@ module.exports = (client) => {
             d.badges = normalizeBadges(badges);
           }
           
-          if (d.date !== today) d.times = [];
+          // ❌ REMOVED: Không reset timestamps khi scan
+          // Giữ nguyên timestamps hiện tại
           
           if (STREAK_CATS.includes(ch.parentId)) await updateRole(ch, true);
           else if (ch.parentId === CAT.SLEEP) await updateRole(ch, false);
